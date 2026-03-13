@@ -1,34 +1,39 @@
 import { Stack, router } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text } from 'react-native';
-import '../global.css';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase';
 
-export {
-  ErrorBoundary,
-} from 'expo-router';
+let cssLoaded = false;
+try {
+  require('../global.css');
+  cssLoaded = true;
+} catch (e) {
+  console.warn('NativeWind CSS failed to load, using fallback styles:', e);
+}
+
+export { ErrorBoundary } from 'expo-router';
 
 export const unstable_settings = {
   initialRouteName: 'index',
 };
 
-SplashScreen.preventAutoHideAsync().catch(() => {});
-
 export default function RootLayout() {
   const [appReady, setAppReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { setSession, setUser } = useAuthStore();
 
-  // Inicializar la app: ocultar splash y marcar como lista
+  // Marcar app como lista inmediatamente (sin depender de SplashScreen)
   useEffect(() => {
-    const timer = setTimeout(async () => {
+    setAppReady(true);
+
+    // Intentar ocultar splash screen si existe
+    (async () => {
       try {
+        const SplashScreen = require('expo-splash-screen');
         await SplashScreen.hideAsync();
       } catch {}
-      setAppReady(true);
-    }, 500);
-    return () => clearTimeout(timer);
+    })();
   }, []);
 
   // Escuchar cambios de sesión de Supabase
@@ -38,7 +43,9 @@ export default function RootLayout() {
       if (session?.user) {
         fetchUserProfile(session.user.id);
       }
-    }).catch(() => {});
+    }).catch((e: any) => {
+      console.warn('getSession error:', e);
+    });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
@@ -46,7 +53,9 @@ export default function RootLayout() {
         fetchUserProfile(session.user.id);
       } else {
         setUser(null);
-        router.replace('/(auth)/login');
+        try {
+          router.replace('/(auth)/login');
+        } catch {}
       }
     });
 
