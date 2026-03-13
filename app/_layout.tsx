@@ -1,8 +1,7 @@
 import { Stack, router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
-import { useFonts, Poppins_600SemiBold } from '@expo-google-fonts/poppins';
-import { Inter_400Regular, Inter_500Medium } from '@expo-google-fonts/inter';
+import { View, ActivityIndicator, Text } from 'react-native';
 import '../global.css';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase';
@@ -15,33 +14,20 @@ export const unstable_settings = {
   initialRouteName: 'index',
 };
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const [appReady, setAppReady] = useState(false);
-
-  const [fontsLoaded, fontError] = useFonts({
-    Poppins_600SemiBold,
-    Inter_400Regular,
-    Inter_500Medium,
-  });
-
   const { setSession, setUser } = useAuthStore();
 
-  // Ocultar splash cuando carguen las fuentes (o si hay error)
+  // Inicializar la app: ocultar splash y marcar como lista
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    const timer = setTimeout(async () => {
+      try {
+        await SplashScreen.hideAsync();
+      } catch {}
       setAppReady(true);
-      SplashScreen.hideAsync().catch(() => {});
-    }
-  }, [fontsLoaded, fontError]);
-
-  // Fallback: si las fuentes se cuelgan en Expo Go, mostrar la app igual después de 2s
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setAppReady(true);
-      SplashScreen.hideAsync().catch(() => {});
-    }, 2000);
+    }, 500);
     return () => clearTimeout(timer);
   }, []);
 
@@ -52,7 +38,7 @@ export default function RootLayout() {
       if (session?.user) {
         fetchUserProfile(session.user.id);
       }
-    });
+    }).catch(() => {});
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
@@ -68,7 +54,14 @@ export default function RootLayout() {
   }, []);
 
   if (!appReady) {
-    return null;
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FF6B1A' }}>
+        <Text style={{ color: 'white', fontSize: 32, fontWeight: 'bold', marginBottom: 16 }}>
+          OficioYa
+        </Text>
+        <ActivityIndicator size="large" color="white" />
+      </View>
+    );
   }
 
   return (
@@ -82,21 +75,24 @@ export default function RootLayout() {
 }
 
 async function fetchUserProfile(userId: string) {
-  const { setUser } = useAuthStore.getState();
+  try {
+    const { setUser } = useAuthStore.getState();
 
-  const { data } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', userId)
-    .single();
+    const { data } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .single();
 
-  if (data) {
-    setUser(data);
-    // Redirigir según el rol
-    if (data.role === 'professional' || data.role === 'both') {
-      router.replace('/(professional)');
-    } else {
-      router.replace('/(client)');
+    if (data) {
+      setUser(data);
+      if (data.role === 'professional' || data.role === 'both') {
+        router.replace('/(professional)');
+      } else {
+        router.replace('/(client)');
+      }
     }
+  } catch (e) {
+    console.warn('Error fetching user profile:', e);
   }
 }
