@@ -178,7 +178,12 @@ export default function ClientJobScreen() {
         table: 'messages',
         filter: `job_id=eq.${id}`,
       }, (payload) => {
-        setMessages((prev) => [...prev, payload.new as Message]);
+        const newMsg = payload.new as Message;
+        setMessages((prev) => {
+          // Deduplicate: skip if already exists (from optimistic update)
+          if (prev.some((m) => m.id === newMsg.id)) return prev;
+          return [...prev, newMsg];
+        });
         setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 100);
       })
       .on('postgres_changes', {
@@ -202,15 +207,31 @@ export default function ClientJobScreen() {
     const content = newMessage.trim();
     setNewMessage('');
 
-    const { error } = await supabase.from('messages').insert({
+    // Optimistic update: show message immediately
+    const optimisticMsg: Message = {
+      id: `temp-${Date.now()}`,
+      content,
+      sender_id: user?.id ?? '',
+      created_at: new Date().toISOString(),
+      flagged: false,
+    };
+    setMessages((prev) => [...prev, optimisticMsg]);
+    setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 50);
+
+    const { data, error } = await supabase.from('messages').insert({
       job_id: id,
       sender_id: user?.id,
       content,
-    });
+    }).select().single();
 
     if (error) {
+      // Remove optimistic message on failure
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
       Alert.alert('Error', 'No se pudo enviar el mensaje');
       setNewMessage(content);
+    } else if (data) {
+      // Replace optimistic message with real one (with server ID)
+      setMessages((prev) => prev.map((m) => m.id === optimisticMsg.id ? data : m));
     }
     setSending(false);
   }
