@@ -7,10 +7,16 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  StyleSheet,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 
 type Professional = {
   balance_due: number;
@@ -35,6 +41,7 @@ export default function EarningsScreen() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const insets = useSafeAreaInsets();
 
   useFocusEffect(
     useCallback(() => {
@@ -91,139 +98,379 @@ export default function EarningsScreen() {
     );
   }
 
+  function getStatusLabel(status: string) {
+    switch (status) {
+      case 'released': return 'Acreditado';
+      case 'held': return 'Retenido';
+      default: return status;
+    }
+  }
+
+  function getStatusColor(status: string) {
+    switch (status) {
+      case 'released': return { bg: COLORS.successLight, text: COLORS.success };
+      case 'held': return { bg: COLORS.warningLight, text: COLORS.warning };
+      default: return { bg: COLORS.borderLight, text: COLORS.textSecondary };
+    }
+  }
+
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator color="#1A3C5E" size="large" />
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator color={COLORS.secondary} size="large" />
       </View>
     );
   }
 
+  const hasDebt = (professional?.balance_due ?? 0) > 0;
+
+  const statsData = [
+    {
+      icon: 'briefcase-outline' as const,
+      value: String(professional?.jobs_completed ?? 0),
+      label: 'Trabajos',
+    },
+    {
+      icon: 'star-outline' as const,
+      value: professional?.rating_avg?.toFixed(1) ?? '--',
+      label: 'Rating',
+    },
+    {
+      icon: 'chatbubble-outline' as const,
+      value: String(professional?.rating_count ?? 0),
+      label: 'Resenas',
+    },
+  ];
+
   return (
-    <ScrollView
-      className="flex-1 bg-gray-50"
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#1A3C5E']} tintColor="#1A3C5E" />
-      }
-    >
-      <View className="bg-secondary px-6 pt-14 pb-6">
-        <Text className="text-2xl font-heading text-white">Ganancias</Text>
-      </View>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={{ paddingBottom: 32 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[COLORS.secondary]}
+            tintColor={COLORS.secondary}
+          />
+        }
+      >
+        {/* Gradient Header */}
+        <LinearGradient
+          colors={[COLORS.secondary, '#2D4A5E']}
+          style={[styles.gradientHeader, { paddingTop: insets.top + 16 }]}
+        >
+          <Text style={styles.headerTitle}>Ganancias</Text>
+          <Text style={styles.headerSubtitle}>Resumen de tu actividad</Text>
+        </LinearGradient>
 
-      {/* Stats */}
-      <View className="flex-row px-4 mt-4 gap-3">
-        <View className="flex-1 bg-white rounded-card p-4 items-center shadow-sm">
-          <Text className="text-2xl font-heading text-primary">
-            {professional?.jobs_completed ?? 0}
-          </Text>
-          <Text className="text-xs font-body text-gray-500 mt-1 text-center">Trabajos completados</Text>
+        {/* Stats Cards */}
+        <View style={styles.statsRow}>
+          {statsData.map((stat, index) => (
+            <View key={index} style={[styles.statCard, SHADOWS.sm]}>
+              <View style={styles.statIconContainer}>
+                <Ionicons name={stat.icon} size={18} color={COLORS.primary} />
+              </View>
+              <Text style={styles.statValue}>{stat.value}</Text>
+              <Text style={styles.statLabel}>{stat.label}</Text>
+            </View>
+          ))}
         </View>
-        <View className="flex-1 bg-white rounded-card p-4 items-center shadow-sm">
-          <Text className="text-2xl font-heading text-primary">
-            {professional?.rating_avg?.toFixed(1) ?? '—'}
-          </Text>
-          <Text className="text-xs font-body text-gray-500 mt-1 text-center">Rating promedio</Text>
-        </View>
-        <View className="flex-1 bg-white rounded-card p-4 items-center shadow-sm">
-          <Text className="text-2xl font-heading text-primary">
-            {professional?.rating_count ?? 0}
-          </Text>
-          <Text className="text-xs font-body text-gray-500 mt-1 text-center">Reseñas</Text>
-        </View>
-      </View>
 
-      {/* Deuda */}
-      {(professional?.balance_due ?? 0) > 0 && (
-        <View className="mx-4 mt-4 bg-red-50 border border-red-200 rounded-card p-5">
-          <Text className="font-heading text-red-700 text-base mb-1">Deuda pendiente</Text>
-          <Text className="font-body text-sm text-red-600 mb-3">
-            Tenés ${professional!.balance_due.toLocaleString('es-AR')} en comisiones por cobrar de trabajos en efectivo.
-            Regularizá tu balance para poder enviar nuevas propuestas.
-          </Text>
-          <TouchableOpacity
-            className="bg-red-500 rounded-btn py-3 items-center"
-            onPress={handlePayDebt}
-          >
-            <Text className="text-white font-body-medium">
-              Pagar ${professional!.balance_due.toLocaleString('es-AR')} con Mercado Pago
+        {/* Balance Card */}
+        {hasDebt ? (
+          <View style={[styles.balanceCard, styles.balanceDebt, SHADOWS.sm]}>
+            <View style={styles.balanceHeader}>
+              <Ionicons name="alert-circle" size={22} color={COLORS.danger} />
+              <Text style={styles.balanceDebtTitle}>Deuda pendiente</Text>
+            </View>
+            <Text style={styles.balanceDebtDescription}>
+              Tenes ${professional!.balance_due.toLocaleString('es-AR')} en comisiones por cobrar de trabajos en efectivo.
+              Regulariza tu balance para poder enviar nuevas propuestas.
             </Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* No debt message */}
-      {(professional?.balance_due ?? 0) === 0 && (
-        <View className="mx-4 mt-4 bg-green-50 border border-green-200 rounded-card p-4">
-          <Text className="font-body-medium text-green-700 text-center">
-            Tu balance está al día ✓
-          </Text>
-        </View>
-      )}
-
-      {/* Historial */}
-      <View className="px-4 mt-6">
-        <Text className="text-lg font-heading text-secondary mb-3">Historial de pagos</Text>
-
-        {payments.length === 0 ? (
-          <View className="bg-white rounded-card p-6 items-center">
-            <Text className="text-3xl mb-2">📊</Text>
-            <Text className="font-body text-gray-500 text-center">
-              Aún no tenés pagos registrados
-            </Text>
-            <Text className="font-body text-xs text-gray-400 text-center mt-1">
-              Los pagos aparecerán acá cuando completes trabajos
-            </Text>
+            <TouchableOpacity
+              style={styles.payButton}
+              onPress={handlePayDebt}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="card-outline" size={18} color={COLORS.white} />
+              <Text style={styles.payButtonText}>
+                Pagar ${professional!.balance_due.toLocaleString('es-AR')} con Mercado Pago
+              </Text>
+            </TouchableOpacity>
           </View>
         ) : (
-          <View className="gap-3">
-            {payments.map((pay) => (
-              <View key={pay.id} className="bg-white rounded-card p-4 shadow-sm">
-                <View className="flex-row justify-between items-start">
-                  <View>
-                    <Text className="font-body-medium text-secondary text-base">
-                      ${pay.net_to_professional.toLocaleString('es-AR')}
-                    </Text>
-                    <Text className="text-xs font-body text-gray-400 mt-1">
-                      Comisión: ${pay.commission_amount.toLocaleString('es-AR')} ·{' '}
-                      {pay.method === 'cash' ? 'Efectivo' : 'Digital'}
-                    </Text>
-                  </View>
-                  <View
-                    className={`px-2 py-1 rounded-full ${
-                      pay.status === 'released'
-                        ? 'bg-green-100'
-                        : pay.status === 'held'
-                        ? 'bg-yellow-100'
-                        : 'bg-gray-100'
-                    }`}
-                  >
-                    <Text
-                      className={`text-xs font-body-medium ${
-                        pay.status === 'released'
-                          ? 'text-green-700'
-                          : pay.status === 'held'
-                          ? 'text-yellow-700'
-                          : 'text-gray-600'
-                      }`}
-                    >
-                      {pay.status === 'released'
-                        ? 'Acreditado'
-                        : pay.status === 'held'
-                        ? 'Retenido'
-                        : pay.status}
-                    </Text>
-                  </View>
-                </View>
-                <Text className="text-xs font-body text-gray-400 mt-2">
-                  {new Date(pay.created_at).toLocaleDateString('es-AR')}
-                </Text>
-              </View>
-            ))}
+          <View style={[styles.balanceCard, styles.balanceGood, SHADOWS.sm]}>
+            <View style={styles.balanceHeader}>
+              <Ionicons name="checkmark-circle" size={22} color={COLORS.success} />
+              <Text style={styles.balanceGoodText}>Tu balance esta al dia</Text>
+            </View>
           </View>
         )}
-      </View>
 
-      <View className="h-8" />
-    </ScrollView>
+        {/* Payment History */}
+        <View style={styles.historySection}>
+          <View style={styles.historyTitleRow}>
+            <Ionicons name="time-outline" size={20} color={COLORS.secondary} />
+            <Text style={styles.historyTitle}>Historial de pagos</Text>
+          </View>
+
+          {payments.length === 0 ? (
+            <View style={[styles.emptyCard, SHADOWS.sm]}>
+              <Ionicons name="bar-chart-outline" size={40} color={COLORS.textMuted} />
+              <Text style={styles.emptyTitle}>Sin pagos registrados</Text>
+              <Text style={styles.emptySubtitle}>
+                Los pagos apareceran aca cuando completes trabajos
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.paymentsList}>
+              {payments.map((pay) => {
+                const statusColor = getStatusColor(pay.status);
+                return (
+                  <View key={pay.id} style={[styles.paymentCard, SHADOWS.sm]}>
+                    <View style={styles.paymentRow}>
+                      <View style={styles.paymentIconContainer}>
+                        <Ionicons
+                          name={pay.method === 'cash' ? 'cash-outline' : 'card-outline'}
+                          size={20}
+                          color={COLORS.secondary}
+                        />
+                      </View>
+                      <View style={styles.paymentDetails}>
+                        <Text style={styles.paymentAmount}>
+                          ${pay.net_to_professional.toLocaleString('es-AR')}
+                        </Text>
+                        <Text style={styles.paymentMeta}>
+                          Comision: ${pay.commission_amount.toLocaleString('es-AR')} ·{' '}
+                          {pay.method === 'cash' ? 'Efectivo' : 'Digital'}
+                        </Text>
+                      </View>
+                      <View style={[styles.statusBadge, { backgroundColor: statusColor.bg }]}>
+                        <Text style={[styles.statusText, { color: statusColor.text }]}>
+                          {getStatusLabel(pay.status)}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.paymentDateRow}>
+                      <Ionicons name="calendar-outline" size={12} color={COLORS.textMuted} />
+                      <Text style={styles.paymentDate}>
+                        {new Date(pay.created_at).toLocaleDateString('es-AR')}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.background,
+  },
+  gradientHeader: {
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+  },
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: COLORS.white,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 4,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    marginTop: 16,
+    gap: 10,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: COLORS.card,
+    borderRadius: RADIUS.md,
+    padding: 14,
+    alignItems: 'center',
+  },
+  statIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  statValue: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.secondary,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  balanceCard: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: RADIUS.md,
+    padding: 18,
+  },
+  balanceDebt: {
+    backgroundColor: COLORS.dangerLight,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  balanceGood: {
+    backgroundColor: COLORS.successLight,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  balanceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  balanceDebtTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.danger,
+  },
+  balanceDebtDescription: {
+    fontSize: 13,
+    color: '#B91C1C',
+    lineHeight: 19,
+    marginTop: 8,
+    marginBottom: 14,
+  },
+  balanceGoodText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.success,
+  },
+  payButton: {
+    backgroundColor: COLORS.danger,
+    borderRadius: RADIUS.sm,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  payButtonText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  historySection: {
+    paddingHorizontal: 16,
+    marginTop: 24,
+  },
+  historyTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
+  },
+  historyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.secondary,
+  },
+  emptyCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: RADIUS.md,
+    padding: 32,
+    alignItems: 'center',
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginTop: 12,
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  paymentsList: {
+    gap: 10,
+  },
+  paymentCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: RADIUS.md,
+    padding: 14,
+  },
+  paymentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  paymentIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.secondaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  paymentDetails: {
+    flex: 1,
+  },
+  paymentAmount: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.secondary,
+  },
+  paymentMeta: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  paymentDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+  },
+  paymentDate: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+});

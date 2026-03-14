@@ -1,12 +1,26 @@
 import { useCallback, useState } from 'react';
-import { View, Text, TouchableOpacity, Alert, ScrollView, Image, RefreshControl } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Alert,
+  ScrollView,
+  Image,
+  RefreshControl,
+  StyleSheet,
+  StatusBar,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { router, useFocusEffect } from 'expo-router';
+import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 
 export default function ClientProfileScreen() {
   const { user, setSession, setUser } = useAuthStore();
   const [refreshing, setRefreshing] = useState(false);
+  const insets = useSafeAreaInsets();
 
   useFocusEffect(
     useCallback(() => {
@@ -46,76 +60,235 @@ export default function ClientProfileScreen() {
     ]);
   }
 
+  const menuItems = [
+    {
+      icon: 'create-outline' as const,
+      label: 'Editar perfil',
+      onPress: () => router.push('/(client)/edit-profile'),
+    },
+    {
+      icon: 'star-outline' as const,
+      label: 'Mis reseñas',
+      onPress: () => Alert.alert('Próximamente', 'Esta función estará disponible pronto.'),
+    },
+    {
+      icon: 'document-text-outline' as const,
+      label: 'Historial de pedidos',
+      onPress: () => Alert.alert('Próximamente', 'Esta función estará disponible pronto.'),
+    },
+  ];
+
   return (
-    <ScrollView
-      className="flex-1 bg-gray-50"
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FF6B1A']} tintColor="#FF6B1A" />
-      }
-    >
-      <View className="bg-white px-6 pt-14 pb-6 border-b border-gray-100">
-        <Text className="text-2xl font-heading text-secondary">Mi perfil</Text>
-      </View>
-
-      {/* Avatar y nombre */}
-      <View className="bg-white mx-4 mt-4 rounded-card p-6 items-center shadow-sm">
-        {user?.avatar_url ? (
-          <Image
-            source={{ uri: user.avatar_url }}
-            className="w-20 h-20 rounded-full mb-3"
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={{ paddingBottom: 32 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
           />
-        ) : (
-          <View className="w-20 h-20 rounded-full bg-primary/10 items-center justify-center mb-3">
-            <Text className="text-3xl font-heading text-primary">
-              {user?.name?.charAt(0).toUpperCase() ?? '?'}
-            </Text>
+        }
+      >
+        {/* Header */}
+        <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+          <Text style={styles.headerTitle}>Mi perfil</Text>
+        </View>
+
+        {/* Avatar Card */}
+        <View style={[styles.avatarCard, SHADOWS.md]}>
+          <View style={styles.avatarContainer}>
+            {user?.avatar_url ? (
+              <Image source={{ uri: user.avatar_url }} style={styles.avatar} />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarInitial}>
+                  {user?.name?.charAt(0).toUpperCase() ?? '?'}
+                </Text>
+              </View>
+            )}
+            <TouchableOpacity
+              style={styles.cameraOverlay}
+              onPress={() => router.push('/(client)/edit-profile')}
+            >
+              <Ionicons name="camera" size={14} color={COLORS.white} />
+            </TouchableOpacity>
           </View>
-        )}
-        <Text className="text-xl font-heading text-secondary">{user?.name}</Text>
-        <Text className="text-sm font-body text-gray-500 mt-1">{user?.email}</Text>
-        {user?.phone && (
-          <Text className="text-sm font-body text-gray-500">{user.phone}</Text>
-        )}
-      </View>
 
-      {/* Acciones */}
-      <View className="mx-4 mt-4 gap-3">
-        <TouchableOpacity
-          className="bg-white rounded-card p-4 flex-row items-center shadow-sm"
-          onPress={() => router.push('/(client)/edit-profile')}
-        >
-          <Text className="flex-1 font-body-medium text-secondary">Editar perfil</Text>
-          <Text className="text-gray-400">→</Text>
-        </TouchableOpacity>
+          <Text style={styles.userName}>{user?.name}</Text>
+          <View style={styles.infoRow}>
+            <Ionicons name="mail-outline" size={14} color={COLORS.textSecondary} />
+            <Text style={styles.infoText}>{user?.email}</Text>
+          </View>
+          {user?.phone ? (
+            <View style={styles.infoRow}>
+              <Ionicons name="call-outline" size={14} color={COLORS.textSecondary} />
+              <Text style={styles.infoText}>{user.phone}</Text>
+            </View>
+          ) : null}
+        </View>
 
-        <TouchableOpacity
-          className="bg-white rounded-card p-4 flex-row items-center shadow-sm"
-          onPress={() => Alert.alert('Próximamente', 'Esta función estará disponible pronto.')}
-        >
-          <Text className="flex-1 font-body-medium text-secondary">Mis reseñas</Text>
-          <Text className="text-gray-400">→</Text>
-        </TouchableOpacity>
+        {/* Menu Items */}
+        <View style={styles.menuSection}>
+          {menuItems.map((item, index) => (
+            <TouchableOpacity
+              key={index}
+              style={[styles.menuItem, SHADOWS.sm]}
+              onPress={item.onPress}
+              activeOpacity={0.7}
+            >
+              <View style={styles.menuIconContainer}>
+                <Ionicons name={item.icon} size={20} color={COLORS.primary} />
+              </View>
+              <Text style={styles.menuLabel}>{item.label}</Text>
+              <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+            </TouchableOpacity>
+          ))}
+        </View>
 
-        <TouchableOpacity
-          className="bg-white rounded-card p-4 flex-row items-center shadow-sm"
-          onPress={() => Alert.alert('Próximamente', 'Esta función estará disponible pronto.')}
-        >
-          <Text className="flex-1 font-body-medium text-secondary">Historial de pedidos</Text>
-          <Text className="text-gray-400">→</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Logout */}
-      <View className="mx-4 mt-6">
-        <TouchableOpacity
-          className="border border-red-200 rounded-card p-4 items-center"
-          onPress={handleLogout}
-        >
-          <Text className="text-red-500 font-body-medium">Cerrar sesión</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View className="h-8" />
-    </ScrollView>
+        {/* Logout */}
+        <View style={styles.logoutSection}>
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={handleLogout}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="log-out-outline" size={20} color={COLORS.danger} />
+            <Text style={styles.logoutText}>Cerrar sesión</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  header: {
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+  },
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: COLORS.secondary,
+  },
+  avatarCard: {
+    backgroundColor: COLORS.card,
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: RADIUS.lg,
+    padding: 24,
+    alignItems: 'center',
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 12,
+  },
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+  },
+  avatarPlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: {
+    fontSize: 30,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  cameraOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.white,
+  },
+  userName: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.secondary,
+    marginBottom: 8,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  infoText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  menuSection: {
+    marginHorizontal: 16,
+    marginTop: 20,
+    gap: 10,
+  },
+  menuItem: {
+    backgroundColor: COLORS.card,
+    borderRadius: RADIUS.md,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  menuIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  menuLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  logoutSection: {
+    marginHorizontal: 16,
+    marginTop: 24,
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: COLORS.dangerLight,
+    borderRadius: RADIUS.md,
+    padding: 14,
+    backgroundColor: COLORS.card,
+  },
+  logoutText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.danger,
+  },
+});
