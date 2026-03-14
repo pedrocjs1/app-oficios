@@ -1,10 +1,8 @@
-import * as FileSystem from 'expo-file-system';
-import { decode } from 'base64-arraybuffer';
 import { supabase } from './supabase';
 
 /**
  * Upload an image from a local URI to Supabase Storage.
- * Uses expo-file-system + base64-arraybuffer for reliable React Native uploads.
+ * Uses React Native's FormData approach which is the most reliable method.
  *
  * @param uri - Local file URI from ImagePicker
  * @param bucket - Supabase storage bucket name
@@ -17,14 +15,20 @@ export async function uploadImage(
   path: string
 ): Promise<string | null> {
   try {
-    const base64 = await FileSystem.readAsStringAsync(uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
+    // React Native FormData approach - most reliable for file uploads
+    const fileName = path.split('/').pop() || 'photo.jpg';
+
+    const formData = new FormData();
+    formData.append('', {
+      uri,
+      name: fileName,
+      type: 'image/jpeg',
+    } as any);
 
     const { data, error } = await supabase.storage
       .from(bucket)
-      .upload(path, decode(base64), {
-        contentType: 'image/jpeg',
+      .upload(path, formData, {
+        contentType: 'multipart/form-data',
         upsert: true,
       });
 
