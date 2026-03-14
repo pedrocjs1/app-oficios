@@ -38,6 +38,15 @@ export default function ProfessionalLayout() {
         }}
       />
       <Tabs.Screen
+        name="jobs"
+        options={{
+          title: 'Trabajos',
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? 'construct' : 'construct-outline'} size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="earnings"
         options={{
           title: 'Ganancias',

@@ -31,7 +31,7 @@ type Job = {
   id: string;
   status: string;
   agreed_price: number;
-  professionals: { users: { name: string } | null } | null;
+  professionals: { user_id: string; users: { name: string; avatar_url: string | null } | null } | null;
 };
 
 export default function ClientJobScreen() {
@@ -67,7 +67,7 @@ export default function ClientJobScreen() {
   async function fetchJob() {
     const { data } = await supabase
       .from('jobs')
-      .select('*, professionals(users(name))')
+      .select('*, professionals!jobs_professional_id_fkey(user_id, users!professionals_user_id_fkey(name, avatar_url))')
       .eq('id', id)
       .single();
     setJob(data);
