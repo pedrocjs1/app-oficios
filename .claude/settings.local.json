@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl:*)",
+      "Bash(curl -s -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxkam93dmtxZHF5anVsbmJwYWN4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MzQyMzYzMSwiZXhwIjoyMDg4OTk5NjMxfQ.n8YTYIrNG7l2m7vx5oXjxeAAUxEjKnpvSNaQ11du9kI\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxkam93dmtxZHF5anVsbmJwYWN4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MzQyMzYzMSwiZXhwIjoyMDg4OTk5NjMxfQ.n8YTYIrNG7l2m7vx5oXjxeAAUxEjKnpvSNaQ11du9kI\" \"https://ldjowvkqdqyjulnbpacx.supabase.co/rest/v1/professional_categories?select=*,professionals\\(user_id,users\\(name\\)\\),categories\\(name\\)\")",
+      "Bash(npx tsc:*)",
+      "Bash(cd:*)"
+    ]
+  }
+}
