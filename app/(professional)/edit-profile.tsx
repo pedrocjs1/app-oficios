@@ -74,7 +74,8 @@ export default function ProfessionalEditProfileScreen() {
 
       if (!uploadError) {
         const { data } = supabase.storage.from('avatars').getPublicUrl(path);
-        avatar_url = data.publicUrl;
+        // Add cache buster to force image reload
+        avatar_url = `${data.publicUrl}?t=${Date.now()}`;
       }
     }
 

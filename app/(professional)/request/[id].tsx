@@ -26,7 +26,7 @@ type ServiceRequest = {
   problem_type: string;
   description: string | null;
   urgency: string;
-  photos: string | null;
+  photos: any;
   proposals_count: number;
   max_proposals: number;
   categories: { name: string } | null;
@@ -35,14 +35,22 @@ type ServiceRequest = {
 const ETA_OPTIONS = ['Hoy', 'Mañana', 'En 2 horas', 'En menos de 1 hora', 'Esta semana'];
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-function parsePhotos(photos: string | null): string[] {
+function parsePhotos(photos: any): string[] {
   if (!photos) return [];
-  try {
-    const parsed = JSON.parse(photos);
-    return Array.isArray(parsed) ? parsed.filter((url: any) => typeof url === 'string' && url.length > 0) : [];
-  } catch {
-    return [];
+  // Supabase returns JSONB as a parsed JS array, not a string
+  if (Array.isArray(photos)) {
+    return photos.filter((url: any) => typeof url === 'string' && url.length > 0);
   }
+  // Fallback: if somehow it comes as a string, parse it
+  if (typeof photos === 'string') {
+    try {
+      const parsed = JSON.parse(photos);
+      return Array.isArray(parsed) ? parsed.filter((url: any) => typeof url === 'string' && url.length > 0) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
 }
 
 function getUrgencyLabel(urgency: string) {
