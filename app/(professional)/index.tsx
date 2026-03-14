@@ -33,12 +33,24 @@ export default function ProfessionalFeedScreen() {
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [verificationStatus, setVerificationStatus] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       fetchRequests();
+      checkVerificationStatus();
     }, [])
   );
+
+  async function checkVerificationStatus() {
+    if (!user?.id) return;
+    const { data } = await supabase
+      .from('professionals')
+      .select('status')
+      .eq('user_id', user.id)
+      .single();
+    setVerificationStatus(data?.status ?? null);
+  }
 
   useEffect(() => {
     const channel = supabase
@@ -87,6 +99,29 @@ export default function ProfessionalFeedScreen() {
           {requests.length} pedido{requests.length !== 1 ? 's' : ''} disponible{requests.length !== 1 ? 's' : ''}
         </Text>
       </View>
+
+      {/* Pending verification banner */}
+      {verificationStatus === 'pending_verification' && (
+        <View className="mx-6 mt-4 bg-yellow-50 border border-yellow-200 rounded-card p-4">
+          <Text className="font-body-medium text-yellow-800 text-sm">
+            Tu perfil está en revisión
+          </Text>
+          <Text className="font-body text-yellow-700 text-xs mt-1">
+            Estamos verificando tus datos. Te notificaremos cuando sea aprobado. Mientras tanto, podés ver los pedidos disponibles.
+          </Text>
+        </View>
+      )}
+
+      {verificationStatus === 'suspended' && (
+        <View className="mx-6 mt-4 bg-red-50 border border-red-200 rounded-card p-4">
+          <Text className="font-body-medium text-red-800 text-sm">
+            Tu cuenta está suspendida
+          </Text>
+          <Text className="font-body text-red-700 text-xs mt-1">
+            Contactá a soporte para más información.
+          </Text>
+        </View>
+      )}
 
       <View className="px-6 pt-6">
         {loading ? (

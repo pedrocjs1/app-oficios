@@ -105,13 +105,17 @@ export default function ProfessionalJobScreen() {
         {
           text: 'Sí, terminé',
           onPress: async () => {
-            await supabase
+            const { error } = await supabase
               .from('jobs')
               .update({
                 status: 'completed_by_professional',
                 completed_at: new Date().toISOString(),
               })
               .eq('id', id);
+            if (error) {
+              Alert.alert('Error', 'No se pudo actualizar el estado. Intentá de nuevo.');
+              return;
+            }
             await fetchJob();
           },
         },

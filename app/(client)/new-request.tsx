@@ -8,6 +8,8 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -81,54 +83,64 @@ export default function NewRequestScreen() {
 
     setLoading(true);
 
-    let location = null;
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const loc = await Location.getCurrentPositionAsync({});
-        location = `POINT(${loc.coords.longitude} ${loc.coords.latitude})`;
+      let location = null;
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({});
+          location = `POINT(${loc.coords.longitude} ${loc.coords.latitude})`;
+        }
+      } catch {
+        // Continuar sin ubicación
       }
-    } catch {
-      // Continuar sin ubicación
-    }
 
-    const { data: request, error } = await supabase
-      .from('service_requests')
-      .insert({
-        client_id: user?.id,
-        category_id: selectedCategory.id,
-        problem_type: selectedProblem,
-        description,
-        urgency,
-        location,
-        photos: '[]',
-      })
-      .select()
-      .single();
-
-    if (error || !request) {
-      setLoading(false);
-      Alert.alert('Error', 'No se pudo crear el pedido');
-      return;
-    }
-
-    // Subir fotos si hay
-    if (photos.length > 0) {
-      const photoUrls = await Promise.all(
-        photos.map((uri, i) => uploadPhoto(uri, request.id, i))
-      );
-      await supabase
+      const { data: request, error } = await supabase
         .from('service_requests')
-        .update({ photos: JSON.stringify(photoUrls) })
-        .eq('id', request.id);
-    }
+        .insert({
+          client_id: user?.id,
+          category_id: selectedCategory.id,
+          problem_type: selectedProblem,
+          description: description.trim(),
+          urgency,
+          location,
+          photos: '[]',
+        })
+        .select()
+        .single();
 
-    setLoading(false);
-    Alert.alert(
-      '¡Pedido publicado!',
-      'Los profesionales de tu zona recibirán una notificación.',
-      [{ text: 'Ver mis pedidos', onPress: () => router.replace('/(client)') }]
-    );
+      if (error || !request) {
+        Alert.alert('Error', 'No se pudo crear el pedido. Intentá de nuevo.');
+        return;
+      }
+
+      // Subir fotos si hay
+      if (photos.length > 0) {
+        try {
+          const photoUrls = await Promise.all(
+            photos.map((uri, i) => uploadPhoto(uri, request.id, i))
+          );
+          await supabase
+            .from('service_requests')
+            .update({ photos: JSON.stringify(photoUrls) })
+            .eq('id', request.id);
+        } catch {
+          console.warn('Error uploading photos');
+          // Continue - request was created successfully, photos can be added later
+        }
+      }
+
+      Alert.alert(
+        '¡Pedido publicado!',
+        'Los profesionales de tu zona recibirán una notificación.',
+        [{ text: 'Ver mis pedidos', onPress: () => router.replace('/(client)') }]
+      );
+    } catch (e) {
+      console.warn('Error creating request:', e);
+      Alert.alert('Error', 'Ocurrió un error inesperado. Intentá de nuevo.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   if (fetchingCategories) {
@@ -140,6 +152,10 @@ export default function NewRequestScreen() {
   }
 
   return (
+    <KeyboardAvoidingView
+      className="flex-1 bg-white"
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
     <ScrollView className="flex-1 bg-white">
       <View className="px-6 pt-14 pb-4 bg-white border-b border-gray-100">
         <TouchableOpacity onPress={() => router.back()}>
@@ -383,5 +399,6 @@ export default function NewRequestScreen() {
 
       <View className="h-10" />
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }

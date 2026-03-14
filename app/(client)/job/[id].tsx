@@ -106,10 +106,14 @@ export default function ClientJobScreen() {
         {
           text: 'Sí, confirmar',
           onPress: async () => {
-            await supabase
+            const { error } = await supabase
               .from('jobs')
               .update({ status: 'confirmed', confirmed_at: new Date().toISOString() })
               .eq('id', id);
+            if (error) {
+              Alert.alert('Error', 'No se pudo confirmar el trabajo. Intentá de nuevo.');
+              return;
+            }
             await fetchJob();
             Alert.alert('¡Gracias!', 'Ahora podés dejar una reseña al profesional.');
           },
