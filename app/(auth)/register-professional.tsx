@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
+import { uploadImage } from '@/lib/uploadImage';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 
 type Category = { id: string; name: string };
@@ -70,21 +71,6 @@ export default function RegisterProfessionalScreen() {
     });
     if (!result.canceled && result.assets[0]) {
       setter(result.assets[0].uri);
-    }
-  }
-
-  async function uploadImage(uri: string, path: string): Promise<string | null> {
-    try {
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      const { data, error } = await supabase.storage
-        .from('professional-docs')
-        .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
-      if (error) return null;
-      const { data: urlData } = supabase.storage.from('professional-docs').getPublicUrl(data.path);
-      return urlData.publicUrl;
-    } catch {
-      return null;
     }
   }
 
@@ -148,13 +134,13 @@ export default function RegisterProfessionalScreen() {
       let selfieUrl: string | null = null;
 
       if (licensePhoto) {
-        licensePhotoUrl = await uploadImage(licensePhoto, `${userId}/license.jpg`);
+        licensePhotoUrl = await uploadImage(licensePhoto, 'professional-docs', `${userId}/license.jpg`);
       }
       if (dniPhoto) {
-        dniPhotoUrl = await uploadImage(dniPhoto, `${userId}/dni.jpg`);
+        dniPhotoUrl = await uploadImage(dniPhoto, 'professional-docs', `${userId}/dni.jpg`);
       }
       if (selfie) {
-        selfieUrl = await uploadImage(selfie, `${userId}/selfie.jpg`);
+        selfieUrl = await uploadImage(selfie, 'professional-docs', `${userId}/selfie.jpg`);
       }
 
       // 4. Create professional profile

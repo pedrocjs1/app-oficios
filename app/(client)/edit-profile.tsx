@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
+import { uploadImage } from '@/lib/uploadImage';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 
@@ -50,18 +51,9 @@ export default function ClientEditProfileScreen() {
     let avatar_url = user?.avatar_url ?? null;
 
     if (avatarUri) {
-      const response = await fetch(avatarUri);
-      const blob = await response.blob();
       const path = `${user?.id}/avatar.jpg`;
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
-
-      if (!uploadError) {
-        const { data } = supabase.storage.from('avatars').getPublicUrl(path);
-        // Add cache buster to force image reload
-        avatar_url = `${data.publicUrl}?t=${Date.now()}`;
-      }
+      const uploaded = await uploadImage(avatarUri, 'avatars', path);
+      if (uploaded) avatar_url = uploaded;
     }
 
     const { error } = await supabase

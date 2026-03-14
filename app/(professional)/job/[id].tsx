@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
+import { uploadImage } from '@/lib/uploadImage';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 
@@ -189,15 +190,8 @@ export default function ProfessionalJobScreen() {
   }
 
   async function uploadWorkPhoto(uri: string, jobId: string, index: number): Promise<string> {
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    const path = `jobs/${jobId}/${index}.jpg`;
-    await supabase.storage.from('request-photos').upload(path, blob, {
-      contentType: 'image/jpeg',
-      upsert: true,
-    });
-    const { data } = supabase.storage.from('request-photos').getPublicUrl(path);
-    return data.publicUrl;
+    const url = await uploadImage(uri, 'request-photos', `jobs/${jobId}/${index}.jpg`);
+    return url ?? '';
   }
 
   async function markCompleted() {
