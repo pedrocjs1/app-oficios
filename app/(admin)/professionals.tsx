@@ -12,7 +12,7 @@ import {
   Image,
   ActivityIndicator,
 } from 'react-native';
-import { supabase, supabaseAdmin } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 type Professional = {
   id: string;
@@ -146,7 +146,7 @@ export default function ProfessionalsScreen() {
             }
 
             // 2. Sync categories: delete old, insert new (uses admin client to bypass RLS)
-            await supabaseAdmin
+            await supabase
               .from('professional_categories')
               .delete()
               .eq('professional_id', pro.id);
@@ -156,7 +156,7 @@ export default function ProfessionalsScreen() {
                 professional_id: pro.id,
                 category_id: catId,
               }));
-              const { error: catError } = await supabaseAdmin
+              const { error: catError } = await supabase
                 .from('professional_categories')
                 .insert(rows);
 
@@ -506,7 +506,7 @@ export default function ProfessionalsScreen() {
                           return;
                         }
                         setActionLoading(true);
-                        await supabaseAdmin
+                        await supabase
                           .from('professional_categories')
                           .delete()
                           .eq('professional_id', selectedPro.id);
@@ -514,7 +514,7 @@ export default function ProfessionalsScreen() {
                           professional_id: selectedPro.id,
                           category_id: catId,
                         }));
-                        const { error } = await supabaseAdmin
+                        const { error } = await supabase
                           .from('professional_categories')
                           .insert(rows);
                         if (error) {

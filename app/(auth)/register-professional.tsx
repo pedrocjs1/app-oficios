@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { supabase, supabaseAdmin } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 type Category = { id: string; name: string };
 
@@ -177,7 +177,7 @@ export default function RegisterProfessionalScreen() {
           category_id: categoryId,
         }));
 
-        const { error: catError } = await supabaseAdmin
+        const { error: catError } = await supabase
           .from('professional_categories')
           .insert(categoryRows);
 
