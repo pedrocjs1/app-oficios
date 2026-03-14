@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseAdmin } from '@/lib/supabase';
 
 type Category = { id: string; name: string };
 
@@ -170,14 +170,14 @@ export default function RegisterProfessionalScreen() {
         return;
       }
 
-      // 5. Assign selected categories
+      // 5. Assign selected categories (uses admin client to bypass RLS)
       if (selectedCategoryIds.length > 0) {
         const categoryRows = selectedCategoryIds.map((categoryId) => ({
           professional_id: profData.id,
           category_id: categoryId,
         }));
 
-        const { error: catError } = await supabase
+        const { error: catError } = await supabaseAdmin
           .from('professional_categories')
           .insert(categoryRows);
 
