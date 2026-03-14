@@ -187,9 +187,12 @@ export default function RegisterProfessionalScreen() {
         }
       }
 
+      // Sign out so the auth listener doesn't auto-redirect to professional area
+      await supabase.auth.signOut();
+
       Alert.alert(
         '¡Registro enviado!',
-        'Tu perfil está en revisión. Te notificaremos cuando sea aprobado.',
+        'Tu perfil está en revisión. Te notificaremos cuando sea aprobado. Podrás iniciar sesión cuando tu cuenta sea verificada.',
         [{ text: 'OK', onPress: () => router.replace('/(auth)/login') }]
       );
     } catch (e) {

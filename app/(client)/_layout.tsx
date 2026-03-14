@@ -1,15 +1,5 @@
 import { Tabs } from 'expo-router';
-import { View, Text } from 'react-native';
-
-function TabIcon({ label, focused }: { label: string; focused: boolean }) {
-  return (
-    <View className="items-center">
-      <Text className={`text-xs font-body-medium mt-1 ${focused ? 'text-primary' : 'text-gray-400'}`}>
-        {label}
-      </Text>
-    </View>
-  );
-}
+import { Platform, Text } from 'react-native';
 
 export default function ClientLayout() {
   return (
@@ -21,8 +11,8 @@ export default function ClientLayout() {
         tabBarStyle: {
           borderTopWidth: 1,
           borderTopColor: '#F3F4F6',
-          paddingBottom: 4,
-          height: 60,
+          paddingBottom: Platform.OS === 'ios' ? 20 : 4,
+          height: Platform.OS === 'ios' ? 80 : 60,
         },
       }}
     >

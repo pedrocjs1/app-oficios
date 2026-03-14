@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
+import { Platform, Text } from 'react-native';
 
 export default function AdminLayout() {
   return (
@@ -11,9 +11,9 @@ export default function AdminLayout() {
         tabBarStyle: {
           backgroundColor: '#1A3C5E',
           borderTopWidth: 0,
-          paddingBottom: 8,
+          paddingBottom: Platform.OS === 'ios' ? 20 : 8,
           paddingTop: 4,
-          height: 60,
+          height: Platform.OS === 'ios' ? 80 : 60,
         },
         tabBarLabelStyle: {
           fontSize: 11,

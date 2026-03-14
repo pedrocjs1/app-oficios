@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
+import { Platform, Text } from 'react-native';
 
 export default function ProfessionalLayout() {
   return (
@@ -11,8 +11,8 @@ export default function ProfessionalLayout() {
         tabBarStyle: {
           borderTopWidth: 1,
           borderTopColor: '#F3F4F6',
-          paddingBottom: 4,
-          height: 60,
+          paddingBottom: Platform.OS === 'ios' ? 20 : 4,
+          height: Platform.OS === 'ios' ? 80 : 60,
         },
       }}
     >
