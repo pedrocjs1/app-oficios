@@ -22,6 +22,7 @@ import { supabase } from '@/lib/supabase';
 import { uploadImage } from '@/lib/uploadImage';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
+import { SafeImage } from '@/components/SafeImage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -593,9 +594,9 @@ export default function ProfessionalJobScreen() {
               </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 {requestPhotos.map((url, i) => (
-                  <Image
+                  <SafeImage
                     key={i}
-                    source={{ uri: url }}
+                    uri={url}
                     style={{
                       width: 120, height: 120, borderRadius: RADIUS.md,
                       marginRight: i < requestPhotos.length - 1 ? 10 : 0,

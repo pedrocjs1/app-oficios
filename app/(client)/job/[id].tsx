@@ -21,6 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
+import { SafeImage } from '@/components/SafeImage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -659,13 +660,12 @@ export default function ClientJobScreen() {
               onPress={() => setPreviewPhoto(photo)}
               style={{ marginRight: 10 }}
             >
-              <Image
-                source={{ uri: photo }}
+              <SafeImage
+                uri={photo}
                 style={{
                   width: 100,
                   height: 100,
                   borderRadius: RADIUS.sm,
-                  backgroundColor: COLORS.borderLight,
                 }}
               />
             </TouchableOpacity>

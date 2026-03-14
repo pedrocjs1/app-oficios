@@ -20,6 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
+import { SafeImage } from '@/components/SafeImage';
 
 type ServiceRequest = {
   id: string;
@@ -231,10 +232,10 @@ export default function ProfessionalRequestScreen() {
                   activeOpacity={0.9}
                   onPress={() => setFullscreenPhoto(item)}
                 >
-                  <Image
-                    source={{ uri: item }}
+                  <SafeImage
+                    uri={item}
                     style={{ width: SCREEN_WIDTH, height: 240 }}
-                    resizeMode="cover"
+                    fallbackText="Sin foto"
                   />
                 </TouchableOpacity>
               )}
