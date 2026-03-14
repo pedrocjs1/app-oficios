@@ -79,6 +79,7 @@ export default function RootLayout() {
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(client)" options={{ headerShown: false }} />
       <Stack.Screen name="(professional)" options={{ headerShown: false }} />
+      <Stack.Screen name="(admin)" options={{ headerShown: false }} />
     </Stack>
   );
 }
@@ -95,7 +96,9 @@ async function fetchUserProfile(userId: string) {
 
     if (data) {
       setUser(data);
-      if (data.role === 'professional' || data.role === 'both') {
+      if (data.role === 'admin') {
+        router.replace('/(admin)');
+      } else if (data.role === 'professional' || data.role === 'both') {
         router.replace('/(professional)');
       } else {
         router.replace('/(client)');

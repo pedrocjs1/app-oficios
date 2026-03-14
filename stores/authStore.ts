@@ -7,7 +7,7 @@ type User = {
   name: string;
   phone: string | null;
   avatar_url: string | null;
-  role: 'client' | 'professional' | 'both';
+  role: 'client' | 'professional' | 'both' | 'admin';
   push_token: string | null;
 };
 
@@ -18,6 +18,7 @@ type AuthState = {
   setUser: (user: User | null) => void;
   isAuthenticated: () => boolean;
   isProfessional: () => boolean;
+  isAdmin: () => boolean;
 };
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -30,4 +31,5 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const role = get().user?.role;
     return role === 'professional' || role === 'both';
   },
+  isAdmin: () => get().user?.role === 'admin',
 }));
