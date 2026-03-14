@@ -115,7 +115,16 @@ export default function ProfessionalJobScreen() {
       }, (payload) => {
         const newMsg = payload.new as Message;
         setMessages((prev) => {
-          // Skip if already exists (from fetchMessages after send)
+          // Replace local temp message from same sender with same content
+          const localMatch = prev.find((m) =>
+            m.id.startsWith('local-') &&
+            m.sender_id === newMsg.sender_id &&
+            m.content === newMsg.content
+          );
+          if (localMatch) {
+            return prev.map((m) => m.id === localMatch.id ? newMsg : m);
+          }
+          // Skip if already exists by real ID
           if (prev.some((m) => m.id === newMsg.id)) return prev;
           return [...prev, newMsg];
         });
@@ -173,9 +182,16 @@ export default function ProfessionalJobScreen() {
       Alert.alert('Error', 'No se pudo enviar el mensaje');
       setNewMessage(content);
     } else {
-      // Reload all messages from server to guarantee consistency
-      await fetchMessages();
-      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+      // Add message to local state immediately (don't depend on fetchMessages/RLS)
+      const localMsg: Message = {
+        id: `local-${Date.now()}`,
+        content,
+        sender_id: user?.id ?? '',
+        created_at: new Date().toISOString(),
+        flagged: false,
+      };
+      setMessages((prev) => [...prev, localMsg]);
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
     }
     setSending(false);
   }
