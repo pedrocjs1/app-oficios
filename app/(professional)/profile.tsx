@@ -1,13 +1,29 @@
-import { View, Text, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { useCallback } from 'react';
+import { View, Text, TouchableOpacity, Alert, ScrollView, Image } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 
 export default function ProfessionalProfileScreen() {
   const { user, setSession, setUser } = useAuthStore();
 
+  // Re-fetch user data when screen gets focus (e.g. after editing profile)
+  useFocusEffect(
+    useCallback(() => {
+      if (!user?.id) return;
+      supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => {
+          if (data) setUser(data);
+        });
+    }, [user?.id])
+  );
+
   async function handleLogout() {
-    Alert.alert('Cerrar sesión', '¿Estás seguro?', [
+    Alert.alert('Cerrar sesion', 'Estas seguro?', [
       { text: 'Cancelar', style: 'cancel' },
       {
         text: 'Salir',
@@ -29,11 +45,18 @@ export default function ProfessionalProfileScreen() {
       </View>
 
       <View className="bg-white mx-4 mt-4 rounded-card p-6 items-center shadow-sm">
-        <View className="w-20 h-20 rounded-full bg-secondary/10 items-center justify-center mb-3">
-          <Text className="text-3xl font-heading text-secondary">
-            {user?.name?.charAt(0).toUpperCase() ?? '?'}
-          </Text>
-        </View>
+        {user?.avatar_url ? (
+          <Image
+            source={{ uri: user.avatar_url }}
+            className="w-20 h-20 rounded-full mb-3"
+          />
+        ) : (
+          <View className="w-20 h-20 rounded-full bg-secondary/10 items-center justify-center mb-3">
+            <Text className="text-3xl font-heading text-secondary">
+              {user?.name?.charAt(0).toUpperCase() ?? '?'}
+            </Text>
+          </View>
+        )}
         <Text className="text-xl font-heading text-secondary">{user?.name}</Text>
         <Text className="text-sm font-body text-gray-500 mt-1">{user?.email}</Text>
         <View className="mt-2 bg-secondary/10 px-3 py-1 rounded-full">
@@ -54,7 +77,7 @@ export default function ProfessionalProfileScreen() {
           className="bg-white rounded-card p-4 flex-row items-center"
           onPress={() => {/* TODO */}}
         >
-          <Text className="flex-1 font-body-medium text-secondary">Mis categorías y zonas</Text>
+          <Text className="flex-1 font-body-medium text-secondary">Mis categorias y zonas</Text>
           <Text className="text-gray-400">→</Text>
         </TouchableOpacity>
 
@@ -62,7 +85,7 @@ export default function ProfessionalProfileScreen() {
           className="bg-white rounded-card p-4 flex-row items-center"
           onPress={() => {/* TODO */}}
         >
-          <Text className="flex-1 font-body-medium text-secondary">Mis reseñas</Text>
+          <Text className="flex-1 font-body-medium text-secondary">Mis resenas</Text>
           <Text className="text-gray-400">→</Text>
         </TouchableOpacity>
       </View>
@@ -72,7 +95,7 @@ export default function ProfessionalProfileScreen() {
           className="border border-red-200 rounded-card p-4 items-center"
           onPress={handleLogout}
         >
-          <Text className="text-red-500 font-body-medium">Cerrar sesión</Text>
+          <Text className="text-red-500 font-body-medium">Cerrar sesion</Text>
         </TouchableOpacity>
       </View>
 
