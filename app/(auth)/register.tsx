@@ -9,20 +9,28 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  StatusBar,
+  StyleSheet,
 } from 'react-native';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
+import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 
 export default function RegisterScreen() {
+  const insets = useSafeAreaInsets();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function handleRegister() {
     if (!name || !email || !password) {
-      Alert.alert('Error', 'Completá nombre, email y contraseña');
+      Alert.alert('Error', 'Completa nombre, email y contrasena');
       return;
     }
 
@@ -47,97 +55,227 @@ export default function RegisterScreen() {
 
       if (profileError) {
         setLoading(false);
-        Alert.alert('Error', 'No se pudo crear el perfil. Intentá de nuevo.');
+        Alert.alert('Error', 'No se pudo crear el perfil. Intenta de nuevo.');
         return;
       }
     }
 
     setLoading(false);
-    // El auth listener redirige automáticamente
+    // El auth listener redirige automaticamente
   }
 
   return (
-    <KeyboardAvoidingView
-      className="flex-1 bg-white"
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView className="flex-1" contentContainerClassName="px-6 py-10">
-        {/* Header */}
-        <TouchableOpacity className="mb-6" onPress={() => router.back()}>
-          <Text className="text-secondary font-body text-base">← Volver</Text>
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+      <StatusBar barStyle="light-content" />
+
+      {/* Gradient Header */}
+      <LinearGradient
+        colors={[COLORS.primary, '#E85D2C']}
+        style={{
+          paddingTop: insets.top + 8,
+          paddingBottom: 28,
+          paddingHorizontal: 20,
+        }}
+      >
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: RADIUS.full,
+            backgroundColor: 'rgba(255,255,255,0.2)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 16,
+          }}
+        >
+          <Ionicons name="chevron-back" size={22} color={COLORS.white} />
         </TouchableOpacity>
-
-        <Text className="text-2xl font-heading text-secondary mb-2">Crear cuenta</Text>
-        <Text className="text-sm font-body text-gray-500 mb-8">
-          Encontrá profesionales verificados cerca tuyo
-        </Text>
-
-        <View className="gap-4">
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: RADIUS.full,
+              backgroundColor: 'rgba(255,255,255,0.2)',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="person-add" size={24} color={COLORS.white} />
+          </View>
           <View>
-            <Text className="text-sm font-body-medium text-secondary mb-1">Nombre completo *</Text>
-            <TextInput
-              className="border border-gray-200 rounded-btn px-4 py-3 text-base font-body"
-              placeholder="Juan García"
-              placeholderTextColor="#9CA3AF"
-              value={name}
-              onChangeText={setName}
-            />
+            <Text style={{ fontSize: 22, fontWeight: '700', color: COLORS.white }}>
+              Crear cuenta
+            </Text>
+            <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 2 }}>
+              Encontra profesionales verificados cerca tuyo
+            </Text>
+          </View>
+        </View>
+      </LinearGradient>
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 24, paddingBottom: 40 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Form Card */}
+          <View
+            style={{
+              backgroundColor: COLORS.card,
+              borderRadius: RADIUS.lg,
+              padding: 20,
+              ...SHADOWS.md,
+              gap: 20,
+            }}
+          >
+            {/* Name */}
+            <View>
+              <Text style={styles.label}>Nombre completo *</Text>
+              <View style={styles.inputRow}>
+                <Ionicons name="person" size={20} color={COLORS.textMuted} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Juan Garcia"
+                  placeholderTextColor={COLORS.textMuted}
+                  value={name}
+                  onChangeText={setName}
+                />
+              </View>
+            </View>
+
+            {/* Email */}
+            <View>
+              <Text style={styles.label}>Email *</Text>
+              <View style={styles.inputRow}>
+                <Ionicons name="mail" size={20} color={COLORS.textMuted} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="tu@email.com"
+                  placeholderTextColor={COLORS.textMuted}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  value={email}
+                  onChangeText={setEmail}
+                />
+              </View>
+            </View>
+
+            {/* Phone */}
+            <View>
+              <Text style={styles.label}>Telefono (opcional)</Text>
+              <View style={styles.inputRow}>
+                <Ionicons name="call" size={20} color={COLORS.textMuted} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="261 XXX-XXXX"
+                  placeholderTextColor={COLORS.textMuted}
+                  keyboardType="phone-pad"
+                  value={phone}
+                  onChangeText={setPhone}
+                />
+              </View>
+            </View>
+
+            {/* Password */}
+            <View>
+              <Text style={styles.label}>Contrasena *</Text>
+              <View style={styles.inputRow}>
+                <Ionicons name="lock-closed" size={20} color={COLORS.textMuted} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Minimo 6 caracteres"
+                  placeholderTextColor={COLORS.textMuted}
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onChangeText={setPassword}
+                />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                  <Ionicons
+                    name={showPassword ? 'eye-off' : 'eye'}
+                    size={22}
+                    color={COLORS.textMuted}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
 
-          <View>
-            <Text className="text-sm font-body-medium text-secondary mb-1">Email *</Text>
-            <TextInput
-              className="border border-gray-200 rounded-btn px-4 py-3 text-base font-body"
-              placeholder="tu@email.com"
-              placeholderTextColor="#9CA3AF"
-              autoCapitalize="none"
-              keyboardType="email-address"
-              value={email}
-              onChangeText={setEmail}
-            />
-          </View>
-
-          <View>
-            <Text className="text-sm font-body-medium text-secondary mb-1">Teléfono (opcional)</Text>
-            <TextInput
-              className="border border-gray-200 rounded-btn px-4 py-3 text-base font-body"
-              placeholder="261 XXX-XXXX"
-              placeholderTextColor="#9CA3AF"
-              keyboardType="phone-pad"
-              value={phone}
-              onChangeText={setPhone}
-            />
-          </View>
-
-          <View>
-            <Text className="text-sm font-body-medium text-secondary mb-1">Contraseña *</Text>
-            <TextInput
-              className="border border-gray-200 rounded-btn px-4 py-3 text-base font-body"
-              placeholder="Mínimo 6 caracteres"
-              placeholderTextColor="#9CA3AF"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
-          </View>
-
+          {/* Register Button */}
           <TouchableOpacity
-            className="bg-primary rounded-btn py-4 items-center mt-4"
+            style={{
+              backgroundColor: COLORS.primary,
+              borderRadius: RADIUS.md,
+              paddingVertical: 16,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginTop: 28,
+              ...SHADOWS.sm,
+            }}
             onPress={handleRegister}
             disabled={loading}
+            activeOpacity={0.8}
           >
             {loading ? (
-              <ActivityIndicator color="white" />
+              <ActivityIndicator color={COLORS.white} />
             ) : (
-              <Text className="text-white font-body-medium text-base">Crear cuenta</Text>
+              <>
+                <Ionicons name="checkmark-circle" size={22} color={COLORS.white} style={{ marginRight: 8 }} />
+                <Text style={{ color: COLORS.white, fontWeight: '600', fontSize: 16 }}>
+                  Crear cuenta
+                </Text>
+              </>
             )}
           </TouchableOpacity>
 
-          <Text className="text-center text-xs font-body text-gray-400 mt-2">
-            Al registrarte aceptás los términos y condiciones de OficioYa
+          {/* Terms */}
+          <Text
+            style={{
+              textAlign: 'center',
+              fontSize: 12,
+              color: COLORS.textMuted,
+              marginTop: 16,
+              lineHeight: 18,
+            }}
+          >
+            Al registrarte aceptas los terminos y condiciones de OficioYa
           </Text>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  label: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginBottom: 8,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: 14,
+    height: 50,
+    backgroundColor: COLORS.white,
+  },
+  inputIcon: {
+    marginRight: 10,
+  },
+  input: {
+    flex: 1,
+    fontSize: 15,
+    color: COLORS.text,
+  },
+});
