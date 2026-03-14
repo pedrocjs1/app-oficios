@@ -1,18 +1,30 @@
 import { Tabs } from 'expo-router';
-import { Platform, Text } from 'react-native';
+import { Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { COLORS } from '@/constants/theme';
 
 export default function ProfessionalLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#1A3C5E',
-        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarActiveTintColor: COLORS.secondary,
+        tabBarInactiveTintColor: COLORS.textMuted,
         tabBarStyle: {
-          borderTopWidth: 1,
-          borderTopColor: '#F3F4F6',
-          paddingBottom: Platform.OS === 'ios' ? 20 : 4,
-          height: Platform.OS === 'ios' ? 80 : 60,
+          backgroundColor: COLORS.card,
+          borderTopWidth: 0,
+          paddingBottom: Platform.OS === 'ios' ? 24 : 8,
+          paddingTop: 8,
+          height: Platform.OS === 'ios' ? 85 : 65,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.06,
+          shadowRadius: 8,
+          elevation: 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
         },
       }}
     >
@@ -20,24 +32,30 @@ export default function ProfessionalLayout() {
         name="index"
         options={{
           title: 'Pedidos',
-          tabBarIcon: ({ focused }) => <Text style={{ fontSize: 22 }}>{focused ? '📋' : '📄'}</Text>,
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? 'list' : 'list-outline'} size={22} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="earnings"
         options={{
           title: 'Ganancias',
-          tabBarIcon: ({ focused }) => <Text style={{ fontSize: 22 }}>{focused ? '💰' : '💵'}</Text>,
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? 'wallet' : 'wallet-outline'} size={22} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Perfil',
-          tabBarIcon: ({ focused }) => <Text style={{ fontSize: 22 }}>{focused ? '👤' : '👥'}</Text>,
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? 'person' : 'person-outline'} size={22} color={color} />
+          ),
         }}
       />
-      {/* Pantallas sin tab */}
+      {/* Hidden screens */}
       <Tabs.Screen name="edit-profile" options={{ href: null }} />
       <Tabs.Screen name="request/[id]" options={{ href: null }} />
       <Tabs.Screen name="job/[id]" options={{ href: null }} />

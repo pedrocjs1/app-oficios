@@ -4,12 +4,17 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
   RefreshControl,
+  StatusBar,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
+import { CardSkeleton } from '@/components/SkeletonLoader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type ServiceRequest = {
   id: string;
@@ -22,10 +27,10 @@ type ServiceRequest = {
   categories: { name: string } | null;
 };
 
-const URGENCY_BADGES: Record<string, { label: string; className: string }> = {
-  normal: { label: 'Normal', className: 'bg-gray-100 text-gray-600' },
-  urgent: { label: 'Urgente', className: 'bg-orange-100 text-orange-600' },
-  emergency: { label: '🚨 Emergencia', className: 'bg-red-100 text-red-600' },
+const URGENCY_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
+  normal: { label: 'Normal', color: '#6B7280', bg: '#F3F4F6', icon: 'time-outline' },
+  urgent: { label: 'Urgente', color: '#F59E0B', bg: '#FEF3C7', icon: 'alert-circle-outline' },
+  emergency: { label: 'Emergencia', color: '#EF4444', bg: '#FEE2E2', icon: 'warning-outline' },
 };
 
 export default function ProfessionalFeedScreen() {
@@ -34,13 +39,25 @@ export default function ProfessionalFeedScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState<string | null>(null);
+  const [stats, setStats] = useState({ jobsCompleted: 0, rating: 0 });
+  const insets = useSafeAreaInsets();
 
   useFocusEffect(
     useCallback(() => {
       fetchRequests();
       checkVerificationStatus();
+      loadStats();
     }, [])
   );
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('professional-feed')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'service_requests' }, fetchRequests)
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   async function checkVerificationStatus() {
     if (!user?.id) return;
@@ -52,128 +69,245 @@ export default function ProfessionalFeedScreen() {
     setVerificationStatus(data?.status ?? null);
   }
 
-  useEffect(() => {
-    const channel = supabase
-      .channel('professional-feed')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'service_requests',
-      }, fetchRequests)
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, []);
+  async function loadStats() {
+    if (!user?.id) return;
+    const { data } = await supabase
+      .from('professionals')
+      .select('jobs_completed, rating_avg')
+      .eq('user_id', user.id)
+      .single();
+    if (data) {
+      setStats({ jobsCompleted: data.jobs_completed ?? 0, rating: data.rating_avg ?? 0 });
+    }
+  }
 
   async function fetchRequests() {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('service_requests')
       .select('*, categories(name)')
       .eq('status', 'open')
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.warn('Error fetching requests:', error);
-    }
     setRequests(data ?? []);
     setLoading(false);
   }
 
   async function onRefresh() {
     setRefreshing(true);
-    await fetchRequests();
+    await Promise.all([fetchRequests(), loadStats()]);
     setRefreshing(false);
   }
 
+  const firstName = user?.name?.split(' ')[0] ?? 'Profesional';
+
   return (
     <ScrollView
-      className="flex-1 bg-gray-50"
+      style={{ flex: 1, backgroundColor: COLORS.background }}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#1A3C5E']} tintColor="#1A3C5E" />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.secondary]} tintColor={COLORS.secondary} />
       }
     >
-      <View className="bg-secondary px-6 pt-14 pb-6">
-        <Text className="text-sm font-body text-white/70">Hola,</Text>
-        <Text className="text-2xl font-heading text-white">{user?.name ?? 'Profesional'} 👷</Text>
-        <Text className="text-sm font-body text-white/70 mt-1">
-          {requests.length} pedido{requests.length !== 1 ? 's' : ''} disponible{requests.length !== 1 ? 's' : ''}
-        </Text>
-      </View>
+      <StatusBar barStyle="light-content" />
 
-      {/* Pending verification banner */}
+      {/* Header */}
+      <LinearGradient
+        colors={[COLORS.secondary, '#2A3F55']}
+        style={{
+          paddingTop: insets.top + 12,
+          paddingHorizontal: 20,
+          paddingBottom: 24,
+          borderBottomLeftRadius: 24,
+          borderBottomRightRadius: 24,
+        }}
+      >
+        <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)' }}>Hola,</Text>
+        <Text style={{ fontSize: 24, fontWeight: '700', color: COLORS.white }}>{firstName} 👷</Text>
+
+        {/* Stats */}
+        <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(255,255,255,0.1)',
+              borderRadius: RADIUS.md,
+              padding: 14,
+              alignItems: 'center',
+            }}
+          >
+            <Ionicons name="briefcase" size={20} color={COLORS.accent} />
+            <Text style={{ fontSize: 22, fontWeight: '700', color: COLORS.white, marginTop: 4 }}>
+              {stats.jobsCompleted}
+            </Text>
+            <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>Trabajos</Text>
+          </View>
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(255,255,255,0.1)',
+              borderRadius: RADIUS.md,
+              padding: 14,
+              alignItems: 'center',
+            }}
+          >
+            <Ionicons name="star" size={20} color="#FBBF24" />
+            <Text style={{ fontSize: 22, fontWeight: '700', color: COLORS.white, marginTop: 4 }}>
+              {stats.rating > 0 ? stats.rating.toFixed(1) : '—'}
+            </Text>
+            <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>Rating</Text>
+          </View>
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(255,255,255,0.1)',
+              borderRadius: RADIUS.md,
+              padding: 14,
+              alignItems: 'center',
+            }}
+          >
+            <Ionicons name="document-text" size={20} color={COLORS.primary} />
+            <Text style={{ fontSize: 22, fontWeight: '700', color: COLORS.white, marginTop: 4 }}>
+              {requests.length}
+            </Text>
+            <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>Disponibles</Text>
+          </View>
+        </View>
+      </LinearGradient>
+
+      {/* Verification banner */}
       {verificationStatus === 'pending_verification' && (
-        <View className="mx-6 mt-4 bg-yellow-50 border border-yellow-200 rounded-card p-4">
-          <Text className="font-body-medium text-yellow-800 text-sm">
-            Tu perfil está en revisión
-          </Text>
-          <Text className="font-body text-yellow-700 text-xs mt-1">
-            Estamos verificando tus datos. Te notificaremos cuando sea aprobado. Mientras tanto, podés ver los pedidos disponibles.
-          </Text>
+        <View
+          style={{
+            marginHorizontal: 20,
+            marginTop: 16,
+            backgroundColor: COLORS.warningLight,
+            borderRadius: RADIUS.md,
+            padding: 14,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+          }}
+        >
+          <Ionicons name="time" size={20} color={COLORS.warning} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: '#92400E' }}>Perfil en revisión</Text>
+            <Text style={{ fontSize: 12, color: '#92400E', marginTop: 2 }}>
+              Te notificaremos cuando sea aprobado.
+            </Text>
+          </View>
         </View>
       )}
 
       {verificationStatus === 'suspended' && (
-        <View className="mx-6 mt-4 bg-red-50 border border-red-200 rounded-card p-4">
-          <Text className="font-body-medium text-red-800 text-sm">
-            Tu cuenta está suspendida
-          </Text>
-          <Text className="font-body text-red-700 text-xs mt-1">
-            Contactá a soporte para más información.
-          </Text>
+        <View
+          style={{
+            marginHorizontal: 20,
+            marginTop: 16,
+            backgroundColor: COLORS.dangerLight,
+            borderRadius: RADIUS.md,
+            padding: 14,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+          }}
+        >
+          <Ionicons name="close-circle" size={20} color={COLORS.danger} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: '#991B1B' }}>Cuenta suspendida</Text>
+            <Text style={{ fontSize: 12, color: '#991B1B', marginTop: 2 }}>
+              Contactá a soporte para más información.
+            </Text>
+          </View>
         </View>
       )}
 
-      <View className="px-6 pt-6">
+      {/* Requests list */}
+      <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
+        <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.secondary, marginBottom: 14 }}>
+          Pedidos disponibles
+        </Text>
+
         {loading ? (
-          <ActivityIndicator color="#1A3C5E" size="large" />
+          <View style={{ gap: 12 }}>
+            <CardSkeleton />
+            <CardSkeleton />
+            <CardSkeleton />
+          </View>
         ) : requests.length === 0 ? (
-          <View className="bg-white rounded-card p-8 items-center">
-            <Text className="text-4xl mb-3">🔍</Text>
-            <Text className="text-base font-body-medium text-gray-600 text-center">
+          <View
+            style={{
+              backgroundColor: COLORS.card,
+              borderRadius: RADIUS.lg,
+              padding: 32,
+              alignItems: 'center',
+              ...SHADOWS.md,
+            }}
+          >
+            <View
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 32,
+                backgroundColor: COLORS.secondaryLight,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 16,
+              }}
+            >
+              <Ionicons name="search" size={32} color={COLORS.secondary} />
+            </View>
+            <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.secondary, textAlign: 'center' }}>
               No hay pedidos disponibles
             </Text>
-            <Text className="text-sm font-body text-gray-400 text-center mt-1">
-              Te notificaremos cuando lleguen nuevos pedidos en tu zona
+            <Text style={{ fontSize: 13, color: COLORS.textMuted, textAlign: 'center', marginTop: 4 }}>
+              Te notificaremos cuando lleguen nuevos pedidos
             </Text>
           </View>
         ) : (
-          <View className="gap-4">
+          <View style={{ gap: 12 }}>
             {requests.map((req) => {
-              const badge = URGENCY_BADGES[req.urgency] ?? URGENCY_BADGES.normal;
+              const urgency = URGENCY_CONFIG[req.urgency] ?? URGENCY_CONFIG.normal;
               const spotsLeft = req.max_proposals - req.proposals_count;
 
               return (
                 <TouchableOpacity
                   key={req.id}
-                  className="bg-white rounded-card p-5 shadow-sm"
+                  activeOpacity={0.7}
                   onPress={() => router.push(`/(professional)/request/${req.id}`)}
+                  style={{
+                    backgroundColor: COLORS.card,
+                    borderRadius: RADIUS.lg,
+                    padding: 16,
+                    ...SHADOWS.md,
+                  }}
                 >
-                  <View className="flex-row items-start justify-between mb-2">
-                    <Text className="font-heading text-secondary text-base flex-1 mr-2">
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.secondary, flex: 1, marginRight: 8 }} numberOfLines={1}>
                       {req.categories?.name ?? 'Servicio'}
                     </Text>
-                    <View className={`px-2 py-1 rounded-full ${badge.className}`}>
-                      <Text className="text-xs font-body-medium">{badge.label}</Text>
+                    <View style={{ backgroundColor: urgency.bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Ionicons name={urgency.icon as any} size={12} color={urgency.color} />
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: urgency.color }}>{urgency.label}</Text>
                     </View>
                   </View>
 
-                  <Text className="font-body-medium text-gray-700 text-sm">{req.problem_type}</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '500', color: COLORS.text }}>{req.problem_type}</Text>
 
                   {req.description && (
-                    <Text className="font-body text-gray-500 text-sm mt-1" numberOfLines={2}>
+                    <Text style={{ fontSize: 13, color: COLORS.textMuted, marginTop: 4 }} numberOfLines={2}>
                       {req.description}
                     </Text>
                   )}
 
-                  <View className="flex-row items-center justify-between mt-3 pt-3 border-t border-gray-100">
-                    <Text className="text-xs font-body text-gray-400">
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.borderLight }}>
+                    <Text style={{ fontSize: 12, color: COLORS.textMuted }}>
                       {new Date(req.created_at).toLocaleDateString('es-AR')}
                     </Text>
-                    <Text className="text-xs font-body-medium text-secondary">
-                      {spotsLeft > 0
-                        ? `Quedan ${spotsLeft} lugar${spotsLeft !== 1 ? 'es' : ''}`
-                        : 'Sin lugares'}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Ionicons name="people-outline" size={14} color={spotsLeft > 0 ? COLORS.accent : COLORS.danger} />
+                      <Text style={{ fontSize: 12, fontWeight: '500', color: spotsLeft > 0 ? COLORS.accent : COLORS.danger }}>
+                        {spotsLeft > 0 ? `${spotsLeft} lugar${spotsLeft !== 1 ? 'es' : ''}` : 'Sin lugares'}
+                      </Text>
+                    </View>
                   </View>
                 </TouchableOpacity>
               );
@@ -182,7 +316,7 @@ export default function ProfessionalFeedScreen() {
         )}
       </View>
 
-      <View className="h-8" />
+      <View style={{ height: 24 }} />
     </ScrollView>
   );
 }
