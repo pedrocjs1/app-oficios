@@ -227,7 +227,22 @@ export default function ClientHomeScreen() {
                 <TouchableOpacity
                   key={req.id}
                   activeOpacity={0.7}
-                  onPress={() => router.push(`/(client)/request/${req.id}`)}
+                  onPress={async () => {
+                    if (req.status === 'assigned' || req.status === 'in_progress') {
+                      // Find the active job for this request and navigate to it
+                      const { data: job } = await supabase
+                        .from('jobs')
+                        .select('id')
+                        .eq('request_id', req.id)
+                        .limit(1)
+                        .maybeSingle();
+                      if (job) {
+                        router.push(`/(client)/job/${job.id}`);
+                        return;
+                      }
+                    }
+                    router.push(`/(client)/request/${req.id}`);
+                  }}
                   style={{
                     backgroundColor: COLORS.card,
                     borderRadius: RADIUS.lg,
