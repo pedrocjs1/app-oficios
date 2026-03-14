@@ -38,6 +38,15 @@ export default function ClientLayout() {
         }}
       />
       <Tabs.Screen
+        name="jobs"
+        options={{
+          title: 'Trabajos',
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? 'construct' : 'construct-outline'} size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="new-request"
         options={{
           title: 'Pedir ayuda',
