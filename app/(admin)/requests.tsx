@@ -5,10 +5,15 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
-  SafeAreaView,
   ActivityIndicator,
+  StyleSheet,
+  StatusBar,
+  Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
+import { COLORS, SHADOWS, RADIUS, SPACING } from '@/constants/theme';
 
 type ServiceRequest = {
   id: string;
@@ -28,11 +33,19 @@ type ServiceRequest = {
   };
 };
 
+const categoryIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
+  Electricista: 'flash',
+  Gasista: 'flame',
+  Plomero: 'water',
+  'Limpieza y mantenimiento': 'sparkles',
+};
+
 export default function RequestsScreen() {
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'active' | 'completed' | 'all'>('active');
+  const insets = useSafeAreaInsets();
 
   async function loadRequests() {
     try {
@@ -79,117 +92,331 @@ export default function RequestsScreen() {
   function getStatusBadge(status: string) {
     switch (status) {
       case 'open': return { text: 'Abierto', bg: '#DBEAFE', color: '#1E40AF' };
-      case 'in_proposals': return { text: 'Propuestas', bg: '#FEF3C7', color: '#92400E' };
+      case 'in_proposals': return { text: 'Propuestas', bg: COLORS.warningLight, color: '#92400E' };
       case 'assigned': return { text: 'Asignado', bg: '#E9D5FF', color: '#6B21A8' };
-      case 'in_progress': return { text: 'En curso', bg: '#D1FAE5', color: '#065F46' };
-      case 'completed': return { text: 'Completado', bg: '#D1FAE5', color: '#065F46' };
-      case 'cancelled': return { text: 'Cancelado', bg: '#FEE2E2', color: '#991B1B' };
-      default: return { text: status, bg: '#E5E7EB', color: '#374151' };
+      case 'in_progress': return { text: 'En curso', bg: COLORS.successLight, color: '#065F46' };
+      case 'completed': return { text: 'Completado', bg: COLORS.successLight, color: '#065F46' };
+      case 'cancelled': return { text: 'Cancelado', bg: COLORS.dangerLight, color: '#991B1B' };
+      default: return { text: status, bg: COLORS.borderLight, color: COLORS.textSecondary };
     }
   }
 
   function getUrgencyBadge(urgency: string) {
     switch (urgency) {
-      case 'urgent': return { text: 'Urgente', color: '#F59E0B' };
-      case 'emergency': return { text: 'Emergencia', color: '#EF4444' };
-      default: return { text: 'Normal', color: '#6B7280' };
+      case 'urgent': return { text: 'Urgente', color: COLORS.warning, bg: COLORS.warningLight, icon: 'alert-circle' as const };
+      case 'emergency': return { text: 'Emergencia', color: COLORS.danger, bg: COLORS.dangerLight, icon: 'warning' as const };
+      default: return { text: 'Normal', color: COLORS.textSecondary, bg: COLORS.borderLight, icon: 'time-outline' as const };
     }
   }
+
+  function getCategoryIcon(categoryName: string): keyof typeof Ionicons.glyphMap {
+    return categoryIcons[categoryName] || 'construct';
+  }
+
+  const filterLabels: Record<string, string> = {
+    active: 'Activos',
+    completed: 'Finalizados',
+    all: 'Todos',
+  };
 
   function renderRequest({ item }: { item: ServiceRequest }) {
     const statusBadge = getStatusBadge(item.status);
     const urgencyBadge = getUrgencyBadge(item.urgency);
+    const catName = item.category?.name || 'Sin categoria';
+    const catIcon = getCategoryIcon(catName);
 
     return (
-      <View
-        style={{
-          backgroundColor: '#1E293B',
-          borderRadius: 12,
-          padding: 16,
-          marginBottom: 8,
-        }}
-      >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <View style={{ flex: 1, marginRight: 8 }}>
-            <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>
-              {item.category?.name || 'Sin categoría'}
-            </Text>
-            <Text style={{ color: '#CBD5E1', fontSize: 13, marginTop: 4 }} numberOfLines={2}>
-              {item.description}
-            </Text>
-            <Text style={{ color: '#9CA3AF', fontSize: 12, marginTop: 6 }}>
-              Cliente: {item.client?.name || 'Desconocido'}
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 6, alignItems: 'center' }}>
-              <Text style={{ color: urgencyBadge.color, fontSize: 12, fontWeight: '600' }}>
-                {urgencyBadge.text}
-              </Text>
-              {item.budget_min && item.budget_max && (
-                <Text style={{ color: '#6B7280', fontSize: 12 }}>
-                  ${item.budget_min.toLocaleString()} - ${item.budget_max.toLocaleString()}
-                </Text>
-              )}
+      <View style={styles.requestCard}>
+        {/* Top Row: Category + Status */}
+        <View style={styles.requestTopRow}>
+          <View style={styles.categoryRow}>
+            <View style={styles.categoryIconCircle}>
+              <Ionicons name={catIcon} size={18} color={COLORS.primary} />
             </View>
-            <Text style={{ color: '#6B7280', fontSize: 11, marginTop: 4 }}>
-              {new Date(item.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+            <Text style={styles.categoryName}>{catName}</Text>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: statusBadge.bg }]}>
+            <Text style={[styles.statusBadgeText, { color: statusBadge.color }]}>
+              {statusBadge.text}
             </Text>
           </View>
-          <View style={{ backgroundColor: statusBadge.bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
-            <Text style={{ color: statusBadge.color, fontSize: 12, fontWeight: '600' }}>{statusBadge.text}</Text>
+        </View>
+
+        {/* Description */}
+        <Text style={styles.description} numberOfLines={2}>
+          {item.description}
+        </Text>
+
+        {/* Client */}
+        <View style={styles.clientRow}>
+          <Ionicons name="person-outline" size={13} color={COLORS.textMuted} />
+          <Text style={styles.clientText}>
+            {item.client?.name || 'Desconocido'}
+          </Text>
+        </View>
+
+        {/* Bottom Row: Urgency + Budget + Date */}
+        <View style={styles.requestBottomRow}>
+          <View style={[styles.urgencyBadge, { backgroundColor: urgencyBadge.bg }]}>
+            <Ionicons name={urgencyBadge.icon} size={12} color={urgencyBadge.color} />
+            <Text style={[styles.urgencyText, { color: urgencyBadge.color }]}>
+              {urgencyBadge.text}
+            </Text>
           </View>
+
+          {item.budget_min != null && item.budget_max != null && (
+            <View style={styles.budgetRow}>
+              <Ionicons name="cash-outline" size={13} color={COLORS.textMuted} />
+              <Text style={styles.budgetText}>
+                ${item.budget_min.toLocaleString()} - ${item.budget_max.toLocaleString()}
+              </Text>
+            </View>
+          )}
+
+          <Text style={styles.dateText}>
+            {new Date(item.created_at).toLocaleDateString('es-AR', {
+              day: 'numeric',
+              month: 'short',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </Text>
         </View>
       </View>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#0F172A' }}>
-      <View style={{ padding: 16, paddingBottom: 8 }}>
-        <Text style={{ color: 'white', fontSize: 22, fontWeight: 'bold', marginBottom: 12 }}>
-          Pedidos 📋
-        </Text>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: insets.top + SPACING.md }]}>
+        <Text style={styles.headerTitle}>Pedidos</Text>
+        <Text style={styles.headerCount}>{requests.length} encontrados</Text>
+      </View>
 
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          {(['active', 'completed', 'all'] as const).map(f => (
-            <TouchableOpacity
-              key={f}
-              onPress={() => setFilter(f)}
-              style={{
-                paddingHorizontal: 14,
-                paddingVertical: 8,
-                borderRadius: 20,
-                backgroundColor: filter === f ? '#FF6B1A' : '#1E293B',
-              }}
-            >
-              <Text style={{ color: 'white', fontSize: 13, fontWeight: filter === f ? '700' : '400' }}>
-                {f === 'active' ? 'Activos' : f === 'completed' ? 'Finalizados' : 'Todos'}
-              </Text>
-            </TouchableOpacity>
-          ))}
+      {/* Filters */}
+      <View style={styles.filtersContainer}>
+        <View style={styles.filterRow}>
+          {(['active', 'completed', 'all'] as const).map(f => {
+            const active = filter === f;
+            return (
+              <TouchableOpacity
+                key={f}
+                onPress={() => setFilter(f)}
+                style={[
+                  styles.filterPill,
+                  active ? styles.filterPillActive : styles.filterPillInactive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.filterPillText,
+                    active ? styles.filterPillTextActive : styles.filterPillTextInactive,
+                  ]}
+                >
+                  {filterLabels[f]}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
 
       {loading ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color="#FF6B1A" />
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
       ) : (
         <FlatList
           data={requests}
           renderItem={renderRequest}
           keyExtractor={item => item.id}
-          contentContainerStyle={{ padding: 16, paddingTop: 8 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF6B1A" />}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />
+          }
           ListEmptyComponent={
-            <View style={{ alignItems: 'center', paddingTop: 60 }}>
-              <Text style={{ fontSize: 48 }}>📭</Text>
-              <Text style={{ color: '#9CA3AF', fontSize: 16, marginTop: 12 }}>
-                No hay pedidos
-              </Text>
+            <View style={styles.emptyContainer}>
+              <View style={styles.emptyIconCircle}>
+                <Ionicons name="document-text-outline" size={36} color={COLORS.textMuted} />
+              </View>
+              <Text style={styles.emptyText}>No hay pedidos</Text>
             </View>
           }
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  header: {
+    backgroundColor: COLORS.secondary,
+    paddingHorizontal: SPACING.xl,
+    paddingBottom: SPACING.lg,
+  },
+  headerTitle: {
+    color: COLORS.white,
+    fontSize: 24,
+    fontWeight: '800',
+  },
+  headerCount: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 13,
+    marginTop: 2,
+  },
+  filtersContainer: {
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.sm,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  filterPill: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.full,
+  },
+  filterPillActive: {
+    backgroundColor: COLORS.primary,
+  },
+  filterPillInactive: {
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  filterPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  filterPillTextActive: {
+    color: COLORS.white,
+  },
+  filterPillTextInactive: {
+    color: COLORS.textSecondary,
+  },
+  requestCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.lg,
+    marginBottom: SPACING.sm,
+    ...SHADOWS.sm,
+  },
+  requestTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  categoryIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  statusBadge: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  description: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: SPACING.sm,
+  },
+  clientRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: SPACING.sm,
+  },
+  clientText: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+  },
+  requestBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    flexWrap: 'wrap',
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+  },
+  urgencyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+  },
+  urgencyText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  budgetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  budgetText: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+  },
+  dateText: {
+    color: COLORS.textMuted,
+    fontSize: 11,
+    marginLeft: 'auto',
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  listContent: {
+    padding: SPACING.lg,
+    paddingTop: SPACING.sm,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingTop: 60,
+  },
+  emptyIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: SPACING.md,
+  },
+  emptyText: {
+    color: COLORS.textMuted,
+    fontSize: 16,
+  },
+});
