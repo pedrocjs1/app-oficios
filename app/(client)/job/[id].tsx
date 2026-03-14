@@ -181,17 +181,7 @@ export default function ClientJobScreen() {
       }, (payload) => {
         const newMsg = payload.new as Message;
         setMessages((prev) => {
-          // Check if this is a message we already added optimistically
-          const tempMatch = prev.find((m) =>
-            m.id.startsWith('temp-') &&
-            m.sender_id === newMsg.sender_id &&
-            m.content === newMsg.content
-          );
-          if (tempMatch) {
-            // Replace temp with real message
-            return prev.map((m) => m.id === tempMatch.id ? newMsg : m);
-          }
-          // Skip if already exists by real ID
+          // Skip if already exists (from fetchMessages after send)
           if (prev.some((m) => m.id === newMsg.id)) return prev;
           return [...prev, newMsg];
         });
@@ -218,17 +208,6 @@ export default function ClientJobScreen() {
     const content = newMessage.trim();
     setNewMessage('');
 
-    // Optimistic update: show message immediately
-    const optimisticMsg: Message = {
-      id: `temp-${Date.now()}`,
-      content,
-      sender_id: user?.id ?? '',
-      created_at: new Date().toISOString(),
-      flagged: false,
-    };
-    setMessages((prev) => [...prev, optimisticMsg]);
-    setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 50);
-
     const { error } = await supabase.from('messages').insert({
       job_id: id,
       sender_id: user?.id,
@@ -236,13 +215,13 @@ export default function ClientJobScreen() {
     });
 
     if (error) {
-      // Remove optimistic message on failure
-      setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
       Alert.alert('Error', 'No se pudo enviar el mensaje');
       setNewMessage(content);
+    } else {
+      // Reload all messages from server to guarantee consistency
+      await fetchMessages();
+      setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 100);
     }
-    // On success, keep the optimistic message. Realtime will bring the real one
-    // and the dedup handler will replace the temp with the real message.
     setSending(false);
   }
 
