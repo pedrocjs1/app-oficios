@@ -84,13 +84,22 @@ export default function ProfessionalRequestScreen() {
 
     const { data: prof } = await supabase
       .from('professionals')
-      .select('id, balance_due')
+      .select('id, balance_due, status, verified')
       .eq('user_id', user?.id)
       .single();
 
     if (!prof) {
       setSubmitting(false);
       Alert.alert('Error', 'No se encontró tu perfil profesional');
+      return;
+    }
+
+    if (prof.status !== 'verified' || !prof.verified) {
+      setSubmitting(false);
+      Alert.alert(
+        'Perfil no verificado',
+        'Tu perfil debe estar verificado para enviar propuestas. Esperá la aprobación del equipo de OficioYa.'
+      );
       return;
     }
 
