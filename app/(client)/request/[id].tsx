@@ -50,8 +50,10 @@ export default function RequestDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [accepting, setAccepting] = useState<string | null>(null);
+  const [existingJobId, setExistingJobId] = useState<string | null>(null);
 
   useEffect(() => {
+    checkExistingJob();
     fetchProposals();
 
     const channel = supabase
@@ -66,6 +68,16 @@ export default function RequestDetailScreen() {
 
     return () => { supabase.removeChannel(channel); };
   }, [id]);
+
+  async function checkExistingJob() {
+    const { data } = await supabase
+      .from('jobs')
+      .select('id')
+      .eq('request_id', id)
+      .limit(1)
+      .maybeSingle();
+    if (data) setExistingJobId(data.id);
+  }
 
   async function fetchProposals() {
     const { data, error } = await supabase
@@ -121,7 +133,7 @@ export default function RequestDetailScreen() {
               const results = await Promise.all([
                 supabase.from('proposals').update({ status: 'accepted' }).eq('id', proposal.id),
                 supabase.from('proposals').update({ status: 'rejected' }).eq('request_id', id).neq('id', proposal.id),
-                supabase.from('service_requests').update({ status: 'assigned' }).eq('id', id),
+                supabase.from('service_requests').update({ status: 'in_progress' }).eq('id', id),
               ]);
 
               const statusErrors = results.filter(r => r.error);
@@ -194,7 +206,28 @@ export default function RequestDetailScreen() {
           />
         }
       >
-        {loading ? (
+        {/* Already has an active job */}
+        {existingJobId ? (
+          <View style={[styles.emptyContainer, SHADOWS.md]}>
+            <View style={[styles.emptyIconContainer, { backgroundColor: COLORS.accentLight }]}>
+              <Ionicons name="checkmark-circle" size={48} color={COLORS.accent} />
+            </View>
+            <Text style={styles.emptyTitle}>Ya aceptaste una propuesta</Text>
+            <Text style={styles.emptySubtitle}>
+              Este pedido ya tiene un trabajo activo.
+            </Text>
+            <TouchableOpacity
+              style={[styles.acceptButton, { marginTop: 20, width: '100%' }]}
+              onPress={() => router.push(`/(client)/job/${existingJobId}`)}
+              activeOpacity={0.8}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="arrow-forward-circle" size={20} color={COLORS.white} />
+                <Text style={styles.acceptButtonText}>Ver trabajo activo</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        ) : loading ? (
           <View style={{ gap: 16 }}>
             <SkeletonCard />
             <SkeletonCard />
