@@ -44,7 +44,7 @@ export default function ProfessionalProfileScreen() {
       <View className="mx-4 mt-4 gap-3">
         <TouchableOpacity
           className="bg-white rounded-card p-4 flex-row items-center"
-          onPress={() => {/* TODO */}}
+          onPress={() => router.push('/(professional)/edit-profile')}
         >
           <Text className="flex-1 font-body-medium text-secondary">Editar perfil</Text>
           <Text className="text-gray-400">→</Text>

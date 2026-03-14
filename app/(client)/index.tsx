@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -34,8 +34,26 @@ export default function ClientHomeScreen() {
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Refetch when screen gets focus (e.g. after creating a request)
+  useFocusEffect(
+    useCallback(() => {
+      fetchRequests();
+    }, [])
+  );
+
+  // Real-time updates
   useEffect(() => {
-    fetchRequests();
+    const channel = supabase
+      .channel('client-requests')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'service_requests',
+        filter: `client_id=eq.${user?.id}`,
+      }, fetchRequests)
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   async function fetchRequests() {

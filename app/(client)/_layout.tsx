@@ -48,6 +48,7 @@ export default function ClientLayout() {
         }}
       />
       {/* Pantallas sin tab */}
+      <Tabs.Screen name="edit-profile" options={{ href: null }} />
       <Tabs.Screen name="request/[id]" options={{ href: null }} />
       <Tabs.Screen name="job/[id]" options={{ href: null }} />
     </Tabs>
