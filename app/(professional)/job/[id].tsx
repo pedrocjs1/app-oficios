@@ -9,10 +9,16 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  StatusBar,
+  StyleSheet,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 
 type Message = {
   id: string;
@@ -33,6 +39,7 @@ type Job = {
 export default function ProfessionalJobScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuthStore();
+  const insets = useSafeAreaInsets();
   const [job, setJob] = useState<Job | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -125,44 +132,86 @@ export default function ProfessionalJobScreen() {
 
   const clientName = job?.users?.name ?? 'Cliente';
 
+  const statusLabel = (() => {
+    switch (job?.status) {
+      case 'pending_start': return 'Pendiente';
+      case 'in_progress': return 'En progreso';
+      case 'completed_by_professional': return 'Esperando confirmación';
+      case 'confirmed': return 'Confirmado';
+      default: return '';
+    }
+  })();
+
   return (
     <KeyboardAvoidingView
-      className="flex-1 bg-white"
+      style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      <StatusBar barStyle="light-content" />
+
       {/* Header */}
-      <View className="bg-secondary px-6 pt-14 pb-4">
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text className="text-white/70 font-body text-sm">← Volver</Text>
-        </TouchableOpacity>
-        <View className="flex-row items-center justify-between mt-2">
-          <View>
-            <Text className="text-lg font-heading text-white">{clientName}</Text>
-            <Text className="text-sm font-body text-white/70">
-              ${job?.agreed_price?.toLocaleString('es-AR')} ·{' '}
-              {job?.payment_method === 'cash' ? 'Efectivo' : 'Digital'}
-            </Text>
+      <LinearGradient
+        colors={[COLORS.secondary, '#2D3F52']}
+        style={[styles.header, { paddingTop: insets.top + 8 }]}
+      >
+        <View style={styles.headerTop}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="chevron-back" size={24} color={COLORS.white} />
+          </TouchableOpacity>
+          <View style={styles.headerInfo}>
+            <Text style={styles.headerName}>{clientName}</Text>
+            <View style={styles.headerMeta}>
+              <Text style={styles.headerPrice}>
+                ${job?.agreed_price?.toLocaleString('es-AR')}
+              </Text>
+              <Text style={styles.headerDivider}> · </Text>
+              <Text style={styles.headerPayment}>
+                {job?.payment_method === 'cash' ? 'Efectivo' : 'Digital'}
+              </Text>
+            </View>
           </View>
           {job?.status === 'in_progress' && (
-            <TouchableOpacity
-              className="bg-white rounded-btn px-4 py-2"
-              onPress={markCompleted}
-            >
-              <Text className="text-secondary font-body-medium text-sm">Terminé</Text>
+            <TouchableOpacity style={styles.terminateButton} onPress={markCompleted}>
+              <Ionicons name="checkmark-done" size={16} color={COLORS.secondary} />
+              <Text style={styles.terminateButtonText}>Terminé</Text>
             </TouchableOpacity>
           )}
           {job?.status === 'completed_by_professional' && (
-            <View className="bg-yellow-400/20 rounded-btn px-3 py-2">
-              <Text className="text-yellow-300 font-body-medium text-xs">Esperando confirmación</Text>
+            <View style={styles.waitingBadge}>
+              <Ionicons name="time-outline" size={14} color="#FBBF24" />
+              <Text style={styles.waitingBadgeText}>Esperando</Text>
             </View>
           )}
         </View>
-      </View>
+        {statusLabel ? (
+          <View style={styles.statusRow}>
+            <View style={[
+              styles.statusDot,
+              {
+                backgroundColor:
+                  job?.status === 'confirmed' ? COLORS.success
+                  : job?.status === 'completed_by_professional' ? COLORS.warning
+                  : COLORS.accent,
+              },
+            ]} />
+            <Text style={styles.statusText}>{statusLabel}</Text>
+          </View>
+        ) : null}
+      </LinearGradient>
 
-      {/* Mensajes */}
+      {/* Confirmed banner */}
+      {job?.status === 'confirmed' && (
+        <View style={styles.confirmedBanner}>
+          <Ionicons name="checkmark-circle" size={18} color={COLORS.success} />
+          <Text style={styles.confirmedBannerText}>Trabajo confirmado por el cliente</Text>
+        </View>
+      )}
+
+      {/* Messages */}
       <ScrollView
         ref={scrollRef}
-        className="flex-1 px-4 pt-4"
+        style={styles.messagesList}
+        contentContainerStyle={styles.messagesContent}
         onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
       >
         {messages.map((msg) => {
@@ -170,30 +219,42 @@ export default function ProfessionalJobScreen() {
           return (
             <View
               key={msg.id}
-              className={`mb-3 max-w-[80%] ${isMe ? 'self-end' : 'self-start'}`}
+              style={[styles.bubbleRow, isMe ? styles.bubbleRowMe : styles.bubbleRowOther]}
             >
               <View
-                className={`rounded-2xl px-4 py-3 ${
+                style={[
+                  styles.bubble,
                   msg.flagged
-                    ? 'bg-yellow-50 border border-yellow-200'
+                    ? styles.bubbleFlagged
                     : isMe
-                    ? 'bg-secondary'
-                    : 'bg-gray-100'
-                }`}
+                    ? styles.bubbleMe
+                    : styles.bubbleOther,
+                ]}
               >
+                {msg.flagged && (
+                  <View style={styles.flaggedIcon}>
+                    <Ionicons name="warning-outline" size={14} color={COLORS.warning} />
+                  </View>
+                )}
                 <Text
-                  className={`font-body text-sm ${
+                  style={[
+                    styles.bubbleText,
                     msg.flagged
-                      ? 'text-yellow-700 italic'
+                      ? styles.bubbleTextFlagged
                       : isMe
-                      ? 'text-white'
-                      : 'text-gray-800'
-                  }`}
+                      ? styles.bubbleTextMe
+                      : styles.bubbleTextOther,
+                  ]}
                 >
                   {msg.content}
                 </Text>
               </View>
-              <Text className={`text-xs font-body text-gray-400 mt-1 ${isMe ? 'text-right' : ''}`}>
+              <Text
+                style={[
+                  styles.timestamp,
+                  isMe ? styles.timestampMe : styles.timestampOther,
+                ]}
+              >
                 {new Date(msg.created_at).toLocaleTimeString('es-AR', {
                   hour: '2-digit',
                   minute: '2-digit',
@@ -202,30 +263,33 @@ export default function ProfessionalJobScreen() {
             </View>
           );
         })}
-        <View className="h-4" />
+        <View style={{ height: 16 }} />
       </ScrollView>
 
       {/* Input */}
       {job?.status !== 'confirmed' && (
-        <View className="flex-row items-center px-4 py-3 border-t border-gray-100 bg-white gap-3">
+        <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <TextInput
-            className="flex-1 bg-gray-100 rounded-full px-4 py-3 text-sm font-body"
-            placeholder="Escribí un mensaje..."
-            placeholderTextColor="#9CA3AF"
+            style={styles.textInput}
+            placeholder="Escribi un mensaje..."
+            placeholderTextColor={COLORS.textMuted}
             value={newMessage}
             onChangeText={setNewMessage}
             multiline
             maxLength={500}
           />
           <TouchableOpacity
-            className="bg-secondary rounded-full w-11 h-11 items-center justify-center"
+            style={[
+              styles.sendButton,
+              { opacity: sending || !newMessage.trim() ? 0.5 : 1 },
+            ]}
             onPress={sendMessage}
             disabled={sending || !newMessage.trim()}
           >
             {sending ? (
-              <ActivityIndicator color="white" size="small" />
+              <ActivityIndicator color={COLORS.white} size="small" />
             ) : (
-              <Text className="text-white text-lg">↑</Text>
+              <Ionicons name="send" size={18} color={COLORS.white} />
             )}
           </TouchableOpacity>
         </View>
@@ -233,3 +297,202 @@ export default function ProfessionalJobScreen() {
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  header: {
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: RADIUS.full,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  headerInfo: {
+    flex: 1,
+  },
+  headerName: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: COLORS.white,
+  },
+  headerMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  headerPrice: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.7)',
+  },
+  headerDivider: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.4)',
+  },
+  headerPayment: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.7)',
+  },
+  terminateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: RADIUS.full,
+    gap: 4,
+  },
+  terminateButtonText: {
+    color: COLORS.secondary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  waitingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(251,191,36,0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
+    gap: 4,
+  },
+  waitingBadgeText: {
+    color: '#FBBF24',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingLeft: 48,
+  },
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: RADIUS.full,
+    marginRight: 6,
+  },
+  statusText: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.6)',
+    fontWeight: '500',
+  },
+  confirmedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.successLight,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  confirmedBannerText: {
+    color: COLORS.success,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  messagesList: {
+    flex: 1,
+  },
+  messagesContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+  bubbleRow: {
+    marginBottom: 12,
+    maxWidth: '80%',
+  },
+  bubbleRowMe: {
+    alignSelf: 'flex-end',
+  },
+  bubbleRowOther: {
+    alignSelf: 'flex-start',
+  },
+  bubble: {
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  bubbleMe: {
+    backgroundColor: COLORS.secondary,
+    borderBottomRightRadius: 4,
+  },
+  bubbleOther: {
+    backgroundColor: '#F3F4F6',
+    borderBottomLeftRadius: 4,
+  },
+  bubbleFlagged: {
+    backgroundColor: COLORS.warningLight,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  flaggedIcon: {
+    marginBottom: 4,
+  },
+  bubbleText: {
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  bubbleTextMe: {
+    color: COLORS.white,
+  },
+  bubbleTextOther: {
+    color: COLORS.text,
+  },
+  bubbleTextFlagged: {
+    color: '#92400E',
+    fontStyle: 'italic',
+  },
+  timestamp: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 4,
+  },
+  timestampMe: {
+    textAlign: 'right',
+  },
+  timestampOther: {
+    textAlign: 'left',
+  },
+  inputBar: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    backgroundColor: COLORS.white,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    gap: 8,
+  },
+  textInput: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+    borderRadius: RADIUS.full,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: COLORS.text,
+    maxHeight: 100,
+  },
+  sendButton: {
+    width: 42,
+    height: 42,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+});
