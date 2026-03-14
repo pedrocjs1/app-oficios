@@ -1,8 +1,13 @@
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, RefreshControl, Image, StatusBar } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
+import { CardSkeleton } from '@/components/SkeletonLoader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type ServiceRequest = {
   id: string;
@@ -14,19 +19,17 @@ type ServiceRequest = {
   categories: { name: string } | null;
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  open: 'Abierto',
-  in_proposals: 'Con propuestas',
-  assigned: 'Asignado',
-  in_progress: 'En progreso',
-  completed: 'Completado',
-  cancelled: 'Cancelado',
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
+  open: { label: 'Abierto', color: '#3B82F6', bg: '#EFF6FF', icon: 'radio-button-on' },
+  in_proposals: { label: 'Con propuestas', color: COLORS.primary, bg: COLORS.primaryLight, icon: 'chatbubbles' },
+  assigned: { label: 'Asignado', color: COLORS.accent, bg: COLORS.accentLight, icon: 'checkmark-circle' },
+  in_progress: { label: 'En progreso', color: '#8B5CF6', bg: '#F5F3FF', icon: 'hammer' },
 };
 
-const URGENCY_COLORS: Record<string, string> = {
-  normal: 'bg-gray-100 text-gray-600',
-  urgent: 'bg-orange-100 text-orange-600',
-  emergency: 'bg-red-100 text-red-600',
+const URGENCY_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  normal: { label: 'Normal', color: '#6B7280', bg: '#F3F4F6' },
+  urgent: { label: 'Urgente', color: '#F59E0B', bg: '#FEF3C7' },
+  emergency: { label: 'Emergencia', color: '#EF4444', bg: '#FEE2E2' },
 };
 
 export default function ClientHomeScreen() {
@@ -34,6 +37,7 @@ export default function ClientHomeScreen() {
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const insets = useSafeAreaInsets();
 
   useFocusEffect(
     useCallback(() => {
@@ -56,16 +60,13 @@ export default function ClientHomeScreen() {
   }, []);
 
   async function fetchRequests() {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('service_requests')
       .select('*, categories(name)')
       .eq('client_id', user?.id)
       .in('status', ['open', 'in_proposals', 'assigned', 'in_progress'])
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.warn('Error fetching requests:', error);
-    }
     setRequests(data ?? []);
     setLoading(false);
   }
@@ -76,91 +77,203 @@ export default function ClientHomeScreen() {
     setRefreshing(false);
   }
 
+  const firstName = user?.name?.split(' ')[0] ?? 'Bienvenido';
+
   return (
     <ScrollView
-      className="flex-1 bg-gray-50"
+      style={{ flex: 1, backgroundColor: COLORS.background }}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FF6B1A']} tintColor="#FF6B1A" />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} tintColor={COLORS.primary} />
       }
     >
-      {/* Header */}
-      <View className="bg-white px-6 pt-14 pb-6">
-        <Text className="text-sm font-body text-gray-500">Hola,</Text>
-        <Text className="text-2xl font-heading text-secondary">{user?.name ?? 'Bienvenido'} 👋</Text>
-      </View>
+      <StatusBar barStyle="dark-content" />
 
-      {/* CTA principal */}
-      <View className="px-6 pt-6">
-        <TouchableOpacity
-          className="bg-primary rounded-card p-6 flex-row items-center justify-between"
-          onPress={() => router.push('/(client)/new-request')}
-        >
-          <View>
-            <Text className="text-white font-heading text-lg">¿Necesitás ayuda?</Text>
-            <Text className="text-white/80 font-body text-sm mt-1">
-              Publicá tu pedido y recibí propuestas
+      {/* Header */}
+      <View
+        style={{
+          paddingTop: insets.top + 12,
+          paddingHorizontal: 20,
+          paddingBottom: 20,
+          backgroundColor: COLORS.card,
+          borderBottomLeftRadius: 24,
+          borderBottomRightRadius: 24,
+          ...SHADOWS.sm,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 14, color: COLORS.textMuted }}>Hola,</Text>
+            <Text style={{ fontSize: 24, fontWeight: '700', color: COLORS.secondary }}>
+              {firstName} 👋
             </Text>
           </View>
-          <Text className="text-4xl">🔧</Text>
+          <TouchableOpacity
+            onPress={() => router.push('/(client)/profile')}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: COLORS.primaryLight,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {user?.avatar_url ? (
+              <Image
+                source={{ uri: user.avatar_url }}
+                style={{ width: 44, height: 44, borderRadius: 22 }}
+              />
+            ) : (
+              <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.primary }}>
+                {user?.name?.charAt(0).toUpperCase() ?? '?'}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* CTA Card */}
+      <View style={{ paddingHorizontal: 20, marginTop: 20 }}>
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => router.push('/(client)/new-request')}
+        >
+          <LinearGradient
+            colors={[COLORS.primary, '#E55A1F']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{
+              borderRadius: RADIUS.lg,
+              padding: 24,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: COLORS.white, fontSize: 20, fontWeight: '700' }}>
+                ¿Necesitás ayuda?
+              </Text>
+              <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 14, marginTop: 4 }}>
+                Publicá tu pedido y recibí propuestas
+              </Text>
+            </View>
+            <View
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: 26,
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Ionicons name="add" size={28} color={COLORS.white} />
+            </View>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
 
-      {/* Pedidos activos */}
-      <View className="px-6 pt-6">
-        <Text className="text-lg font-heading text-secondary mb-4">Tus pedidos activos</Text>
+      {/* Active requests */}
+      <View style={{ paddingHorizontal: 20, paddingTop: 28 }}>
+        <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.secondary, marginBottom: 16 }}>
+          Tus pedidos activos
+        </Text>
 
         {loading ? (
-          <ActivityIndicator color="#FF6B1A" />
+          <View style={{ gap: 12 }}>
+            <CardSkeleton />
+            <CardSkeleton />
+          </View>
         ) : requests.length === 0 ? (
-          <View className="bg-white rounded-card p-6 items-center">
-            <Text className="text-4xl mb-3">📋</Text>
-            <Text className="text-base font-body-medium text-gray-600 text-center">
+          <View
+            style={{
+              backgroundColor: COLORS.card,
+              borderRadius: RADIUS.lg,
+              padding: 32,
+              alignItems: 'center',
+              ...SHADOWS.md,
+            }}
+          >
+            <View
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 32,
+                backgroundColor: COLORS.primaryLight,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 16,
+              }}
+            >
+              <Ionicons name="clipboard-outline" size={32} color={COLORS.primary} />
+            </View>
+            <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.secondary, textAlign: 'center' }}>
               No tenés pedidos activos
             </Text>
-            <Text className="text-sm font-body text-gray-400 text-center mt-1">
+            <Text style={{ fontSize: 13, color: COLORS.textMuted, textAlign: 'center', marginTop: 4 }}>
               Publicá tu primer pedido y conectate con profesionales
             </Text>
           </View>
         ) : (
-          <View className="gap-3">
-            {requests.map((req) => (
-              <TouchableOpacity
-                key={req.id}
-                className="bg-white rounded-card p-4 shadow-sm"
-                onPress={() => router.push(`/(client)/request/${req.id}`)}
-              >
-                <View className="flex-row items-start justify-between mb-2">
-                  <Text className="font-body-medium text-secondary text-base flex-1 mr-2">
-                    {req.categories?.name ?? 'Servicio'}
+          <View style={{ gap: 12 }}>
+            {requests.map((req) => {
+              const statusCfg = STATUS_CONFIG[req.status] ?? STATUS_CONFIG.open;
+              const urgencyCfg = URGENCY_CONFIG[req.urgency] ?? URGENCY_CONFIG.normal;
+
+              return (
+                <TouchableOpacity
+                  key={req.id}
+                  activeOpacity={0.7}
+                  onPress={() => router.push(`/(client)/request/${req.id}`)}
+                  style={{
+                    backgroundColor: COLORS.card,
+                    borderRadius: RADIUS.lg,
+                    padding: 16,
+                    ...SHADOWS.md,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                      <Ionicons name={statusCfg.icon as any} size={16} color={statusCfg.color} />
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.secondary, flex: 1 }} numberOfLines={1}>
+                        {req.categories?.name ?? 'Servicio'}
+                      </Text>
+                    </View>
+                    <View style={{ backgroundColor: statusCfg.bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: statusCfg.color }}>
+                        {statusCfg.label}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text style={{ fontSize: 14, color: COLORS.textSecondary }} numberOfLines={2}>
+                    {req.problem_type}
                   </Text>
-                  <View className="bg-primary/10 px-2 py-1 rounded-full">
-                    <Text className="text-xs text-primary font-body-medium">
-                      {STATUS_LABELS[req.status] ?? req.status}
-                    </Text>
-                  </View>
-                </View>
 
-                <Text className="font-body text-gray-600 text-sm" numberOfLines={2}>
-                  {req.problem_type}
-                </Text>
-
-                <View className="flex-row items-center justify-between mt-3">
-                  <View className={`px-2 py-1 rounded-full ${URGENCY_COLORS[req.urgency]}`}>
-                    <Text className="text-xs font-body-medium capitalize">{req.urgency}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.borderLight }}>
+                    <View style={{ backgroundColor: urgencyCfg.bg, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '500', color: urgencyCfg.color }}>
+                        {urgencyCfg.label}
+                      </Text>
+                    </View>
+                    {req.proposals_count > 0 && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Ionicons name="chatbubbles-outline" size={14} color={COLORS.primary} />
+                        <Text style={{ fontSize: 12, fontWeight: '500', color: COLORS.primary }}>
+                          {req.proposals_count} propuesta{req.proposals_count !== 1 ? 's' : ''}
+                        </Text>
+                      </View>
+                    )}
                   </View>
-                  {req.proposals_count > 0 && (
-                    <Text className="text-xs font-body text-primary">
-                      {req.proposals_count} propuesta{req.proposals_count !== 1 ? 's' : ''}
-                    </Text>
-                  )}
-                </View>
-              </TouchableOpacity>
-            ))}
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
       </View>
 
-      <View className="h-8" />
+      <View style={{ height: 24 }} />
     </ScrollView>
   );
 }
