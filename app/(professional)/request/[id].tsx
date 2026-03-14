@@ -11,10 +11,15 @@ import {
   Modal,
   Dimensions,
   FlatList,
+  StatusBar,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 
 type ServiceRequest = {
   id: string;
@@ -40,9 +45,26 @@ function parsePhotos(photos: string | null): string[] {
   }
 }
 
+function getUrgencyLabel(urgency: string) {
+  switch (urgency) {
+    case 'emergency': return 'Emergencia';
+    case 'urgent': return 'Urgente';
+    default: return 'Normal';
+  }
+}
+
+function getUrgencyColor(urgency: string) {
+  switch (urgency) {
+    case 'emergency': return COLORS.danger;
+    case 'urgent': return COLORS.warning;
+    default: return COLORS.success;
+  }
+}
+
 export default function ProfessionalRequestScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuthStore();
+  const insets = useSafeAreaInsets();
   const [request, setRequest] = useState<ServiceRequest | null>(null);
   const [price, setPrice] = useState('');
   const [message, setMessage] = useState('');
@@ -151,8 +173,9 @@ export default function ProfessionalRequestScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator color="#1A3C5E" size="large" />
+      <View style={{ flex: 1, backgroundColor: COLORS.background, alignItems: 'center', justifyContent: 'center' }}>
+        <StatusBar barStyle="light-content" />
+        <ActivityIndicator color={COLORS.secondary} size="large" />
       </View>
     );
   }
@@ -163,176 +186,243 @@ export default function ProfessionalRequestScreen() {
   const photoUrls = parsePhotos(request.photos);
 
   return (
-    <ScrollView className="flex-1 bg-gray-50">
-      <View className="bg-white px-6 pt-14 pb-4 border-b border-gray-100">
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text className="text-secondary font-body">← Volver</Text>
-        </TouchableOpacity>
-        <Text className="text-2xl font-heading text-secondary mt-3">
-          {request.categories?.name}
-        </Text>
-      </View>
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+      <StatusBar barStyle="light-content" />
 
-      {/* Photos carousel */}
-      {photoUrls.length > 0 && (
-        <View>
-          <FlatList
-            data={photoUrls}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(_, i) => i.toString()}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                activeOpacity={0.9}
-                onPress={() => setFullscreenPhoto(item)}
-              >
-                <Image
-                  source={{ uri: item }}
-                  style={{ width: SCREEN_WIDTH, height: 240 }}
-                  resizeMode="cover"
-                />
-              </TouchableOpacity>
-            )}
-          />
-          {photoUrls.length > 1 && (
-            <View className="flex-row justify-center gap-1 py-2 bg-white">
-              {photoUrls.map((_, i) => (
-                <View
-                  key={i}
-                  className="w-2 h-2 rounded-full bg-gray-300"
-                />
-              ))}
-            </View>
-          )}
-          <Text className="text-xs font-body text-gray-400 text-center pb-2 bg-white">
-            Tocá para ampliar · {photoUrls.length} foto{photoUrls.length !== 1 ? 's' : ''}
-          </Text>
-        </View>
-      )}
-
-      <View className="px-6 pt-6 gap-4">
-        {/* Detalle del pedido */}
-        <View className="bg-white rounded-card p-5">
-          <Text className="font-heading text-secondary text-base mb-2">Detalle del pedido</Text>
-          <Text className="font-body-medium text-gray-700">{request.problem_type}</Text>
-          {request.description && (
-            <Text className="font-body text-gray-500 text-sm mt-2">{request.description}</Text>
-          )}
-          <View className="flex-row items-center mt-3 gap-3">
-            <View className="bg-gray-100 px-3 py-1 rounded-full">
-              <Text className="text-xs font-body-medium text-gray-600 capitalize">
-                {request.urgency}
-              </Text>
-            </View>
-            <Text className="text-xs font-body text-gray-400">
-              {spotsLeft} lugar{spotsLeft !== 1 ? 'es' : ''} disponible{spotsLeft !== 1 ? 's' : ''}
+      <ScrollView style={{ flex: 1 }}>
+        {/* Gradient Header */}
+        <LinearGradient
+          colors={[COLORS.secondary, '#2D4A5E']}
+          style={[styles.gradientHeader, { paddingTop: insets.top + 8 }]}
+        >
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.headerBackButton}
+          >
+            <Ionicons name="chevron-back" size={24} color={COLORS.white} />
+          </TouchableOpacity>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={styles.headerCategory}>
+              {request.categories?.name}
             </Text>
+            <Text style={styles.headerLabel}>Detalle del pedido</Text>
           </View>
-        </View>
+        </LinearGradient>
 
-        {alreadyProposed ? (
-          <View className="bg-green-50 border border-green-200 rounded-card p-5 items-center">
-            <Text className="text-2xl mb-2">✅</Text>
-            <Text className="font-body-medium text-green-700 text-center">
-              Ya enviaste una propuesta para este pedido
-            </Text>
-            <Text className="font-body text-sm text-green-600 text-center mt-1">
-              Esperá la respuesta del cliente
-            </Text>
-          </View>
-        ) : spotsLeft <= 0 ? (
-          <View className="bg-gray-50 border border-gray-200 rounded-card p-5 items-center">
-            <Text className="text-2xl mb-2">🔒</Text>
-            <Text className="font-body-medium text-gray-600 text-center">
-              Este pedido ya recibió el máximo de propuestas
-            </Text>
-          </View>
-        ) : (
-          /* Formulario de propuesta */
-          <View className="bg-white rounded-card p-5 gap-4">
-            <Text className="font-heading text-secondary text-base">Tu propuesta</Text>
-
-            <View>
-              <Text className="text-sm font-body-medium text-secondary mb-1">Precio (ARS) *</Text>
-              <TextInput
-                className="border border-gray-200 rounded-btn px-4 py-3 text-base font-body"
-                placeholder="Ej: 15000"
-                placeholderTextColor="#9CA3AF"
-                keyboardType="numeric"
-                value={price}
-                onChangeText={setPrice}
-              />
-            </View>
-
-            <View>
-              <Text className="text-sm font-body-medium text-secondary mb-2">
-                Disponibilidad *
-              </Text>
-              <View className="flex-row flex-wrap gap-2">
-                {ETA_OPTIONS.map((opt) => (
-                  <TouchableOpacity
-                    key={opt}
-                    className={`px-3 py-2 rounded-full border ${
-                      eta === opt
-                        ? 'border-secondary bg-secondary/10'
-                        : 'border-gray-200'
-                    }`}
-                    onPress={() => setEta(opt)}
-                  >
-                    <Text
-                      className={`text-sm font-body-medium ${
-                        eta === opt ? 'text-secondary' : 'text-gray-500'
-                      }`}
-                    >
-                      {opt}
-                    </Text>
-                  </TouchableOpacity>
+        {/* Photos carousel */}
+        {photoUrls.length > 0 && (
+          <View>
+            <FlatList
+              data={photoUrls}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={(_, i) => i.toString()}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => setFullscreenPhoto(item)}
+                >
+                  <Image
+                    source={{ uri: item }}
+                    style={{ width: SCREEN_WIDTH, height: 240 }}
+                    resizeMode="cover"
+                  />
+                </TouchableOpacity>
+              )}
+            />
+            {photoUrls.length > 1 && (
+              <View style={styles.dotsRow}>
+                {photoUrls.map((_, i) => (
+                  <View
+                    key={i}
+                    style={styles.dot}
+                  />
                 ))}
+              </View>
+            )}
+            <Text style={styles.photoHint}>
+              Tocá para ampliar · {photoUrls.length} foto{photoUrls.length !== 1 ? 's' : ''}
+            </Text>
+          </View>
+        )}
+
+        <View style={{ padding: 16, gap: 16 }}>
+          {/* Request detail card */}
+          <View style={[styles.detailCard, SHADOWS.md]}>
+            <Text style={styles.detailCardTitle}>Detalle del pedido</Text>
+
+            <View style={styles.detailRow}>
+              <View style={styles.detailIconContainer}>
+                <Ionicons name="build-outline" size={18} color={COLORS.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.detailLabel}>Problema</Text>
+                <Text style={styles.detailValue}>{request.problem_type}</Text>
               </View>
             </View>
 
-            <View>
-              <Text className="text-sm font-body-medium text-secondary mb-1">
-                Mensaje (opcional)
-              </Text>
-              <TextInput
-                className="border border-gray-200 rounded-card px-4 py-3 text-sm font-body h-20"
-                placeholder="Contale al cliente tu experiencia o algo relevante..."
-                placeholderTextColor="#9CA3AF"
-                multiline
-                textAlignVertical="top"
-                value={message}
-                onChangeText={setMessage}
-                maxLength={300}
-              />
+            {request.description && (
+              <View style={styles.detailRow}>
+                <View style={styles.detailIconContainer}>
+                  <Ionicons name="document-text-outline" size={18} color={COLORS.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.detailLabel}>Descripción</Text>
+                  <Text style={styles.detailValue}>{request.description}</Text>
+                </View>
+              </View>
+            )}
+
+            <View style={styles.detailRow}>
+              <View style={styles.detailIconContainer}>
+                <Ionicons name="time-outline" size={18} color={getUrgencyColor(request.urgency)} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.detailLabel}>Urgencia</Text>
+                <View style={[styles.urgencyBadge, { backgroundColor: getUrgencyColor(request.urgency) + '18' }]}>
+                  <Text style={[styles.urgencyBadgeText, { color: getUrgencyColor(request.urgency) }]}>
+                    {getUrgencyLabel(request.urgency)}
+                  </Text>
+                </View>
+              </View>
             </View>
 
-            <TouchableOpacity
-              className="bg-secondary rounded-btn py-4 items-center"
-              onPress={submitProposal}
-              disabled={submitting}
-            >
-              {submitting ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <Text className="text-white font-body-medium text-base">Enviar propuesta</Text>
-              )}
-            </TouchableOpacity>
+            <View style={[styles.detailRow, { borderBottomWidth: 0, paddingBottom: 0 }]}>
+              <View style={styles.detailIconContainer}>
+                <Ionicons name="people-outline" size={18} color={COLORS.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.detailLabel}>Lugares disponibles</Text>
+                <Text style={styles.detailValue}>
+                  {spotsLeft} de {request.max_proposals}
+                </Text>
+              </View>
+            </View>
           </View>
-        )}
-      </View>
 
-      <View className="h-8" />
+          {/* Already proposed state */}
+          {alreadyProposed ? (
+            <View style={[styles.stateCard, { backgroundColor: COLORS.successLight, borderColor: COLORS.success + '40' }]}>
+              <View style={[styles.stateIconContainer, { backgroundColor: COLORS.success + '20' }]}>
+                <Ionicons name="checkmark-circle" size={36} color={COLORS.success} />
+              </View>
+              <Text style={[styles.stateTitle, { color: COLORS.success }]}>
+                Ya enviaste una propuesta
+              </Text>
+              <Text style={[styles.stateSubtitle, { color: COLORS.success }]}>
+                Esperá la respuesta del cliente
+              </Text>
+            </View>
+          ) : spotsLeft <= 0 ? (
+            <View style={[styles.stateCard, { backgroundColor: COLORS.borderLight, borderColor: COLORS.border }]}>
+              <View style={[styles.stateIconContainer, { backgroundColor: COLORS.textMuted + '20' }]}>
+                <Ionicons name="lock-closed" size={36} color={COLORS.textMuted} />
+              </View>
+              <Text style={[styles.stateTitle, { color: COLORS.textSecondary }]}>
+                Máximo de propuestas alcanzado
+              </Text>
+              <Text style={[styles.stateSubtitle, { color: COLORS.textMuted }]}>
+                Este pedido ya no acepta más propuestas
+              </Text>
+            </View>
+          ) : (
+            /* Proposal form */
+            <View style={[styles.formCard, SHADOWS.md]}>
+              <Text style={styles.formTitle}>Tu propuesta</Text>
+
+              {/* Price input */}
+              <View>
+                <Text style={styles.inputLabel}>Precio (ARS) *</Text>
+                <View style={styles.priceInputContainer}>
+                  <View style={styles.pricePrefix}>
+                    <Text style={styles.pricePrefixText}>$</Text>
+                  </View>
+                  <TextInput
+                    style={styles.priceInput}
+                    placeholder="15.000"
+                    placeholderTextColor={COLORS.textMuted}
+                    keyboardType="numeric"
+                    value={price}
+                    onChangeText={setPrice}
+                  />
+                </View>
+              </View>
+
+              {/* ETA pills */}
+              <View>
+                <Text style={styles.inputLabel}>Disponibilidad *</Text>
+                <View style={styles.pillsContainer}>
+                  {ETA_OPTIONS.map((opt) => (
+                    <TouchableOpacity
+                      key={opt}
+                      style={[
+                        styles.pill,
+                        eta === opt && styles.pillSelected,
+                      ]}
+                      onPress={() => setEta(opt)}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.pillText,
+                          eta === opt && styles.pillTextSelected,
+                        ]}
+                      >
+                        {opt}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Message textarea */}
+              <View>
+                <Text style={styles.inputLabel}>Mensaje (opcional)</Text>
+                <TextInput
+                  style={styles.textarea}
+                  placeholder="Contale al cliente tu experiencia o algo relevante..."
+                  placeholderTextColor={COLORS.textMuted}
+                  multiline
+                  textAlignVertical="top"
+                  value={message}
+                  onChangeText={setMessage}
+                  maxLength={300}
+                />
+                <Text style={styles.charCount}>{message.length}/300</Text>
+              </View>
+
+              {/* Submit button */}
+              <TouchableOpacity
+                style={[styles.submitButton, submitting && { opacity: 0.7 }]}
+                onPress={submitProposal}
+                disabled={submitting}
+                activeOpacity={0.8}
+              >
+                {submitting ? (
+                  <ActivityIndicator color={COLORS.white} />
+                ) : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Ionicons name="send" size={18} color={COLORS.white} />
+                    <Text style={styles.submitButtonText}>Enviar propuesta</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        <View style={{ height: 32 }} />
+      </ScrollView>
 
       {/* Fullscreen photo modal */}
       <Modal visible={!!fullscreenPhoto} transparent animationType="fade">
-        <View className="flex-1 bg-black/95 items-center justify-center">
+        <View style={styles.modalOverlay}>
           <TouchableOpacity
-            className="absolute top-14 right-6 z-10 bg-white/20 rounded-full w-10 h-10 items-center justify-center"
+            style={styles.modalClose}
             onPress={() => setFullscreenPhoto(null)}
           >
-            <Text className="text-white text-xl font-bold">✕</Text>
+            <Ionicons name="close" size={24} color={COLORS.white} />
           </TouchableOpacity>
           {fullscreenPhoto && (
             <Image
@@ -343,6 +433,247 @@ export default function ProfessionalRequestScreen() {
           )}
         </View>
       </Modal>
-    </ScrollView>
+    </View>
   );
 }
+
+const styles = {
+  gradientHeader: {
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+  },
+  headerBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.full,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  headerCategory: {
+    fontSize: 22,
+    fontWeight: '700' as const,
+    color: COLORS.white,
+  },
+  headerLabel: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 2,
+  },
+  dotsRow: {
+    flexDirection: 'row' as const,
+    justifyContent: 'center' as const,
+    gap: 6,
+    paddingVertical: 8,
+    backgroundColor: COLORS.card,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.border,
+  },
+  photoHint: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    textAlign: 'center' as const,
+    paddingBottom: 8,
+    backgroundColor: COLORS.card,
+  },
+  detailCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: RADIUS.lg,
+    padding: 20,
+  },
+  detailCardTitle: {
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: COLORS.secondary,
+    marginBottom: 16,
+  },
+  detailRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
+    gap: 12,
+    paddingBottom: 14,
+    marginBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+  },
+  detailIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    marginTop: 2,
+  },
+  detailLabel: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    fontWeight: '500' as const,
+    marginBottom: 2,
+  },
+  detailValue: {
+    fontSize: 15,
+    color: COLORS.text,
+    fontWeight: '500' as const,
+    lineHeight: 21,
+  },
+  urgencyBadge: {
+    alignSelf: 'flex-start' as const,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    marginTop: 2,
+  },
+  urgencyBadgeText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+  },
+  stateCard: {
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    padding: 28,
+    alignItems: 'center' as const,
+  },
+  stateIconContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    marginBottom: 16,
+  },
+  stateTitle: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    textAlign: 'center' as const,
+    marginBottom: 4,
+  },
+  stateSubtitle: {
+    fontSize: 14,
+    textAlign: 'center' as const,
+  },
+  formCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: RADIUS.lg,
+    padding: 20,
+    gap: 20,
+  },
+  formTitle: {
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: COLORS.secondary,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: COLORS.secondary,
+    marginBottom: 8,
+  },
+  priceInputContainer: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    overflow: 'hidden' as const,
+  },
+  pricePrefix: {
+    backgroundColor: COLORS.background,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRightWidth: 1,
+    borderRightColor: COLORS.border,
+  },
+  pricePrefixText: {
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: COLORS.secondary,
+  },
+  priceInput: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 18,
+    fontWeight: '600' as const,
+    color: COLORS.text,
+  },
+  pillsContainer: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 8,
+  },
+  pill: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: RADIUS.full,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+  },
+  pillSelected: {
+    borderColor: COLORS.secondary,
+    backgroundColor: COLORS.secondary + '10',
+  },
+  pillText: {
+    fontSize: 14,
+    fontWeight: '500' as const,
+    color: COLORS.textSecondary,
+  },
+  pillTextSelected: {
+    color: COLORS.secondary,
+    fontWeight: '600' as const,
+  },
+  textarea: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: COLORS.text,
+    height: 100,
+    textAlignVertical: 'top' as const,
+  },
+  charCount: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    textAlign: 'right' as const,
+    marginTop: 4,
+  },
+  submitButton: {
+    backgroundColor: COLORS.secondary,
+    borderRadius: RADIUS.md,
+    paddingVertical: 16,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  submitButtonText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: '600' as const,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  modalClose: {
+    position: 'absolute' as const,
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+};
