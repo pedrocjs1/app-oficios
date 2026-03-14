@@ -4,7 +4,6 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
   Alert,
   RefreshControl,
   StyleSheet,
@@ -18,27 +17,34 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 
-type Professional = {
+const COMMISSION_RATE = 0.1;
+
+type ProfessionalData = {
+  id: string;
   balance_due: number;
   jobs_completed: number;
   rating_avg: number;
   rating_count: number;
 };
 
-type Payment = {
+type CompletedJob = {
   id: string;
-  amount: number;
-  commission_amount: number;
-  net_to_professional: number;
-  method: string;
+  agreed_price: number;
+  payment_method: string;
+  confirmed_at: string;
   status: string;
-  created_at: string;
+  service_requests: {
+    categories: {
+      name: string;
+    };
+  };
+  reviews: { rating: number }[];
 };
 
 export default function EarningsScreen() {
   const { user } = useAuthStore();
-  const [professional, setProfessional] = useState<Professional | null>(null);
-  const [payments, setPayments] = useState<Payment[]>([]);
+  const [professional, setProfessional] = useState<ProfessionalData | null>(null);
+  const [completedJobs, setCompletedJobs] = useState<CompletedJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const insets = useSafeAreaInsets();
@@ -46,34 +52,39 @@ export default function EarningsScreen() {
   useFocusEffect(
     useCallback(() => {
       loadData();
-    }, [])
+    }, [user?.id])
   );
 
   async function loadData() {
+    if (!user?.id) return;
     try {
       const { data: prof, error: profError } = await supabase
         .from('professionals')
-        .select('balance_due, jobs_completed, rating_avg, rating_count')
-        .eq('user_id', user?.id)
+        .select('id, balance_due, jobs_completed, rating_avg, rating_count')
+        .eq('user_id', user.id)
         .single();
 
-      if (profError) {
+      if (profError || !prof) {
         console.warn('Error loading professional data:', profError);
         setLoading(false);
         return;
       }
 
-      if (prof) {
-        setProfessional(prof);
+      setProfessional(prof);
 
-        const { data: pays } = await supabase
-          .from('payments')
-          .select('*, jobs!inner(professional_id, professionals!inner(user_id))')
-          .order('created_at', { ascending: false })
-          .limit(20);
+      const { data: jobs } = await supabase
+        .from('jobs')
+        .select(`
+          id, agreed_price, payment_method, confirmed_at, status,
+          service_requests(categories(name)),
+          reviews(rating)
+        `)
+        .eq('professional_id', prof.id)
+        .eq('status', 'confirmed')
+        .order('confirmed_at', { ascending: false })
+        .limit(20);
 
-        setPayments(pays ?? []);
-      }
+      setCompletedJobs((jobs as CompletedJob[]) ?? []);
     } catch (e) {
       console.warn('Error loading earnings:', e);
     } finally {
@@ -90,7 +101,7 @@ export default function EarningsScreen() {
   function handlePayDebt() {
     Alert.alert(
       'Pagar deuda',
-      `Debés $${professional?.balance_due?.toLocaleString('es-AR')} por comisiones de trabajos en efectivo. Redirigiremos a Mercado Pago.`,
+      `Debes $${professional?.balance_due?.toLocaleString('es-AR')} por comisiones de trabajos en efectivo. Redirigiremos a Mercado Pago.`,
       [
         { text: 'Cancelar', style: 'cancel' },
         { text: 'Pagar', onPress: () => { /* TODO: integrar MP */ } },
@@ -98,29 +109,41 @@ export default function EarningsScreen() {
     );
   }
 
-  function getStatusLabel(status: string) {
-    switch (status) {
-      case 'released': return 'Acreditado';
-      case 'held': return 'Retenido';
-      default: return status;
+  function renderStars(rating: number) {
+    const stars = [];
+    for (let i = 1; i <= 5; i++) {
+      stars.push(
+        <Ionicons
+          key={i}
+          name={i <= rating ? 'star' : 'star-outline'}
+          size={12}
+          color={i <= rating ? COLORS.warning : COLORS.textMuted}
+        />
+      );
     }
+    return stars;
   }
 
-  function getStatusColor(status: string) {
-    switch (status) {
-      case 'released': return { bg: COLORS.successLight, text: COLORS.success };
-      case 'held': return { bg: COLORS.warningLight, text: COLORS.warning };
-      default: return { bg: COLORS.borderLight, text: COLORS.textSecondary };
-    }
-  }
-
-  if (loading) {
+  function renderSkeletons() {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator color={COLORS.secondary} size="large" />
+      <View style={{ paddingHorizontal: 16, gap: 12, marginTop: 16 }}>
+        {[1, 2, 3].map((i) => (
+          <View key={i} style={[styles.paymentCard, SHADOWS.sm]}>
+            <View style={{ gap: 8 }}>
+              <View style={[styles.skeletonLine, { width: '50%' }]} />
+              <View style={[styles.skeletonLine, { width: '70%' }]} />
+              <View style={[styles.skeletonLine, { width: '40%' }]} />
+            </View>
+          </View>
+        ))}
       </View>
     );
   }
+
+  const totalNetEarnings = completedJobs.reduce((sum, job) => {
+    const net = (job.agreed_price ?? 0) * (1 - COMMISSION_RATE);
+    return sum + net;
+  }, 0);
 
   const hasDebt = (professional?.balance_due ?? 0) > 0;
 
@@ -179,6 +202,19 @@ export default function EarningsScreen() {
           ))}
         </View>
 
+        {/* Total Earned Card */}
+        <View style={[styles.totalEarnedCard, SHADOWS.md]}>
+          <View style={styles.totalEarnedIconContainer}>
+            <Ionicons name="wallet-outline" size={24} color={COLORS.success} />
+          </View>
+          <View style={styles.totalEarnedContent}>
+            <Text style={styles.totalEarnedLabel}>Total ganado (neto)</Text>
+            <Text style={styles.totalEarnedValue}>
+              ${totalNetEarnings.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+            </Text>
+          </View>
+        </View>
+
         {/* Balance Card */}
         {hasDebt ? (
           <View style={[styles.balanceCard, styles.balanceDebt, SHADOWS.sm]}>
@@ -210,14 +246,16 @@ export default function EarningsScreen() {
           </View>
         )}
 
-        {/* Payment History */}
+        {/* Payment History from completed jobs */}
         <View style={styles.historySection}>
           <View style={styles.historyTitleRow}>
             <Ionicons name="time-outline" size={20} color={COLORS.secondary} />
             <Text style={styles.historyTitle}>Historial de pagos</Text>
           </View>
 
-          {payments.length === 0 ? (
+          {loading ? (
+            renderSkeletons()
+          ) : completedJobs.length === 0 ? (
             <View style={[styles.emptyCard, SHADOWS.sm]}>
               <Ionicons name="bar-chart-outline" size={40} color={COLORS.textMuted} />
               <Text style={styles.emptyTitle}>Sin pagos registrados</Text>
@@ -227,38 +265,77 @@ export default function EarningsScreen() {
             </View>
           ) : (
             <View style={styles.paymentsList}>
-              {payments.map((pay) => {
-                const statusColor = getStatusColor(pay.status);
+              {completedJobs.map((job) => {
+                const commission = (job.agreed_price ?? 0) * COMMISSION_RATE;
+                const net = (job.agreed_price ?? 0) - commission;
+                const category = job.service_requests?.categories?.name ?? 'Servicio';
+                const review = job.reviews?.[0];
+                const isCash = job.payment_method === 'cash';
+
                 return (
-                  <View key={pay.id} style={[styles.paymentCard, SHADOWS.sm]}>
-                    <View style={styles.paymentRow}>
+                  <View key={job.id} style={[styles.paymentCard, SHADOWS.sm]}>
+                    {/* Top row: category + method badge */}
+                    <View style={styles.paymentTopRow}>
                       <View style={styles.paymentIconContainer}>
                         <Ionicons
-                          name={pay.method === 'cash' ? 'cash-outline' : 'card-outline'}
+                          name={isCash ? 'cash-outline' : 'card-outline'}
                           size={20}
                           color={COLORS.secondary}
                         />
                       </View>
-                      <View style={styles.paymentDetails}>
-                        <Text style={styles.paymentAmount}>
-                          ${pay.net_to_professional.toLocaleString('es-AR')}
-                        </Text>
-                        <Text style={styles.paymentMeta}>
-                          Comision: ${pay.commission_amount.toLocaleString('es-AR')} ·{' '}
-                          {pay.method === 'cash' ? 'Efectivo' : 'Digital'}
+                      <View style={styles.paymentInfo}>
+                        <Text style={styles.paymentCategory}>{category}</Text>
+                        <View style={[styles.methodBadge, {
+                          backgroundColor: isCash ? COLORS.warningLight : COLORS.accentLight,
+                        }]}>
+                          <Text style={[styles.methodBadgeText, {
+                            color: isCash ? COLORS.warning : COLORS.accent,
+                          }]}>
+                            {isCash ? 'Efectivo' : 'Digital'}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Price breakdown */}
+                    <View style={styles.priceBreakdown}>
+                      <View style={styles.priceRow}>
+                        <Text style={styles.priceLabel}>Precio acordado</Text>
+                        <Text style={styles.priceValue}>
+                          ${(job.agreed_price ?? 0).toLocaleString('es-AR')}
                         </Text>
                       </View>
-                      <View style={[styles.statusBadge, { backgroundColor: statusColor.bg }]}>
-                        <Text style={[styles.statusText, { color: statusColor.text }]}>
-                          {getStatusLabel(pay.status)}
+                      <View style={styles.priceRow}>
+                        <Text style={styles.priceLabel}>Comision (10%)</Text>
+                        <Text style={[styles.priceValue, { color: COLORS.danger }]}>
+                          -${commission.toLocaleString('es-AR')}
+                        </Text>
+                      </View>
+                      <View style={[styles.priceRow, styles.netRow]}>
+                        <Text style={styles.netLabel}>Neto</Text>
+                        <Text style={styles.netValue}>
+                          ${net.toLocaleString('es-AR')}
                         </Text>
                       </View>
                     </View>
-                    <View style={styles.paymentDateRow}>
-                      <Ionicons name="calendar-outline" size={12} color={COLORS.textMuted} />
-                      <Text style={styles.paymentDate}>
-                        {new Date(pay.created_at).toLocaleDateString('es-AR')}
-                      </Text>
+
+                    {/* Footer: date + rating */}
+                    <View style={styles.paymentFooter}>
+                      <View style={styles.paymentDateRow}>
+                        <Ionicons name="calendar-outline" size={12} color={COLORS.textMuted} />
+                        <Text style={styles.paymentDate}>
+                          {job.confirmed_at
+                            ? new Date(job.confirmed_at).toLocaleDateString('es-AR', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                              })
+                            : ''}
+                        </Text>
+                      </View>
+                      {review ? (
+                        <View style={styles.starsRow}>{renderStars(review.rating)}</View>
+                      ) : null}
                     </View>
                   </View>
                 );
@@ -278,12 +355,6 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.background,
   },
   gradientHeader: {
     paddingHorizontal: 20,
@@ -332,6 +403,40 @@ const styles = StyleSheet.create({
     marginTop: 2,
     textAlign: 'center',
   },
+  // Total earned card
+  totalEarnedCard: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    backgroundColor: COLORS.card,
+    borderRadius: RADIUS.md,
+    padding: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  totalEarnedIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.successLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  totalEarnedContent: {
+    flex: 1,
+  },
+  totalEarnedLabel: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  totalEarnedValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: COLORS.success,
+    marginTop: 2,
+  },
+  // Balance
   balanceCard: {
     marginHorizontal: 16,
     marginTop: 16,
@@ -384,6 +489,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  // History
   historySection: {
     paddingHorizontal: 16,
     marginTop: 24,
@@ -423,9 +529,9 @@ const styles = StyleSheet.create({
   paymentCard: {
     backgroundColor: COLORS.card,
     borderRadius: RADIUS.md,
-    padding: 14,
+    padding: 16,
   },
-  paymentRow: {
+  paymentTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -438,39 +544,88 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
   },
-  paymentDetails: {
+  paymentInfo: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  paymentAmount: {
-    fontSize: 16,
+  paymentCategory: {
+    fontSize: 15,
     fontWeight: '700',
     color: COLORS.secondary,
   },
-  paymentMeta: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    marginTop: 2,
-  },
-  statusBadge: {
+  methodBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: RADIUS.full,
   },
-  statusText: {
+  methodBadgeText: {
     fontSize: 11,
     fontWeight: '600',
+  },
+  // Price breakdown
+  priceBreakdown: {
+    marginTop: 14,
+    gap: 6,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  priceLabel: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  priceValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  netRow: {
+    marginTop: 4,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+  },
+  netLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.secondary,
+  },
+  netValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.success,
+  },
+  // Footer
+  paymentFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
   },
   paymentDateRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.borderLight,
   },
   paymentDate: {
     fontSize: 12,
     color: COLORS.textMuted,
+  },
+  starsRow: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  // Skeleton
+  skeletonLine: {
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: COLORS.borderLight,
   },
 });

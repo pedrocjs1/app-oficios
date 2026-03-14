@@ -57,6 +57,7 @@ export default function ClientLayout() {
       />
       {/* Hidden screens */}
       <Tabs.Screen name="edit-profile" options={{ href: null }} />
+      <Tabs.Screen name="history" options={{ href: null }} />
       <Tabs.Screen name="request/[id]" options={{ href: null }} />
       <Tabs.Screen name="job/[id]" options={{ href: null }} />
     </Tabs>

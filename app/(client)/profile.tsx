@@ -74,7 +74,7 @@ export default function ClientProfileScreen() {
     {
       icon: 'document-text-outline' as const,
       label: 'Historial de pedidos',
-      onPress: () => Alert.alert('Próximamente', 'Esta función estará disponible pronto.'),
+      onPress: () => router.push('/(client)/history'),
     },
   ];
 
