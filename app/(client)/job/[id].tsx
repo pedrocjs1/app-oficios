@@ -180,7 +180,17 @@ export default function ClientJobScreen() {
       }, (payload) => {
         const newMsg = payload.new as Message;
         setMessages((prev) => {
-          // Deduplicate: skip if already exists (from optimistic update)
+          // Check if this is a message we already added optimistically
+          const tempMatch = prev.find((m) =>
+            m.id.startsWith('temp-') &&
+            m.sender_id === newMsg.sender_id &&
+            m.content === newMsg.content
+          );
+          if (tempMatch) {
+            // Replace temp with real message
+            return prev.map((m) => m.id === tempMatch.id ? newMsg : m);
+          }
+          // Skip if already exists by real ID
           if (prev.some((m) => m.id === newMsg.id)) return prev;
           return [...prev, newMsg];
         });
@@ -218,21 +228,20 @@ export default function ClientJobScreen() {
     setMessages((prev) => [...prev, optimisticMsg]);
     setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 50);
 
-    const { data, error } = await supabase.from('messages').insert({
+    const { error } = await supabase.from('messages').insert({
       job_id: id,
       sender_id: user?.id,
       content,
-    }).select().single();
+    });
 
     if (error) {
       // Remove optimistic message on failure
       setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
       Alert.alert('Error', 'No se pudo enviar el mensaje');
       setNewMessage(content);
-    } else if (data) {
-      // Replace optimistic message with real one (with server ID)
-      setMessages((prev) => prev.map((m) => m.id === optimisticMsg.id ? data : m));
     }
+    // On success, keep the optimistic message. Realtime will bring the real one
+    // and the dedup handler will replace the temp with the real message.
     setSending(false);
   }
 
