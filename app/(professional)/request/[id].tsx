@@ -7,6 +7,10 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Image,
+  Modal,
+  Dimensions,
+  FlatList,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -17,13 +21,24 @@ type ServiceRequest = {
   problem_type: string;
   description: string | null;
   urgency: string;
-  photos: string[];
+  photos: string | null;
   proposals_count: number;
   max_proposals: number;
   categories: { name: string } | null;
 };
 
 const ETA_OPTIONS = ['Hoy', 'Mañana', 'En 2 horas', 'En menos de 1 hora', 'Esta semana'];
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+function parsePhotos(photos: string | null): string[] {
+  if (!photos) return [];
+  try {
+    const parsed = JSON.parse(photos);
+    return Array.isArray(parsed) ? parsed.filter((url: any) => typeof url === 'string' && url.length > 0) : [];
+  } catch {
+    return [];
+  }
+}
 
 export default function ProfessionalRequestScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -35,6 +50,7 @@ export default function ProfessionalRequestScreen() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [alreadyProposed, setAlreadyProposed] = useState(false);
+  const [fullscreenPhoto, setFullscreenPhoto] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -144,6 +160,7 @@ export default function ProfessionalRequestScreen() {
   if (!request) return null;
 
   const spotsLeft = request.max_proposals - request.proposals_count;
+  const photoUrls = parsePhotos(request.photos);
 
   return (
     <ScrollView className="flex-1 bg-gray-50">
@@ -155,6 +172,44 @@ export default function ProfessionalRequestScreen() {
           {request.categories?.name}
         </Text>
       </View>
+
+      {/* Photos carousel */}
+      {photoUrls.length > 0 && (
+        <View>
+          <FlatList
+            data={photoUrls}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(_, i) => i.toString()}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => setFullscreenPhoto(item)}
+              >
+                <Image
+                  source={{ uri: item }}
+                  style={{ width: SCREEN_WIDTH, height: 240 }}
+                  resizeMode="cover"
+                />
+              </TouchableOpacity>
+            )}
+          />
+          {photoUrls.length > 1 && (
+            <View className="flex-row justify-center gap-1 py-2 bg-white">
+              {photoUrls.map((_, i) => (
+                <View
+                  key={i}
+                  className="w-2 h-2 rounded-full bg-gray-300"
+                />
+              ))}
+            </View>
+          )}
+          <Text className="text-xs font-body text-gray-400 text-center pb-2 bg-white">
+            Tocá para ampliar · {photoUrls.length} foto{photoUrls.length !== 1 ? 's' : ''}
+          </Text>
+        </View>
+      )}
 
       <View className="px-6 pt-6 gap-4">
         {/* Detalle del pedido */}
@@ -269,6 +324,25 @@ export default function ProfessionalRequestScreen() {
       </View>
 
       <View className="h-8" />
+
+      {/* Fullscreen photo modal */}
+      <Modal visible={!!fullscreenPhoto} transparent animationType="fade">
+        <View className="flex-1 bg-black/95 items-center justify-center">
+          <TouchableOpacity
+            className="absolute top-14 right-6 z-10 bg-white/20 rounded-full w-10 h-10 items-center justify-center"
+            onPress={() => setFullscreenPhoto(null)}
+          >
+            <Text className="text-white text-xl font-bold">✕</Text>
+          </TouchableOpacity>
+          {fullscreenPhoto && (
+            <Image
+              source={{ uri: fullscreenPhoto }}
+              style={{ width: SCREEN_WIDTH, height: SCREEN_WIDTH }}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
