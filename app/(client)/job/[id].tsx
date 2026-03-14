@@ -893,16 +893,13 @@ export default function ClientJobScreen() {
 
   function renderChatTab() {
     return (
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={insets.top + 110}
-      >
+      <View style={{ flex: 1 }}>
         <ScrollView
           ref={chatScrollRef}
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16 }}
           onContentSizeChange={() => chatScrollRef.current?.scrollToEnd({ animated: false })}
+          keyboardShouldPersistTaps="handled"
         >
           {messages.length === 0 && (
             <View style={{
@@ -1048,7 +1045,7 @@ export default function ClientJobScreen() {
             )}
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     );
   }
 
@@ -1233,7 +1230,10 @@ export default function ClientJobScreen() {
   // ── Main Render ────────────────────────────────────────────────────
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: COLORS.background }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <StatusBar barStyle="dark-content" />
 
       {/* ── Header ── */}
@@ -1413,6 +1413,6 @@ export default function ClientJobScreen() {
       {/* ── Modals ── */}
       {renderRatingModal()}
       {renderPhotoPreview()}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
