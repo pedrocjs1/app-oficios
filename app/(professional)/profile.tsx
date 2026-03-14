@@ -1,29 +1,37 @@
-import { useCallback } from 'react';
-import { View, Text, TouchableOpacity, Alert, ScrollView, Image } from 'react-native';
+import { useCallback, useState } from 'react';
+import { View, Text, TouchableOpacity, Alert, ScrollView, Image, RefreshControl } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { router, useFocusEffect } from 'expo-router';
 
 export default function ProfessionalProfileScreen() {
   const { user, setSession, setUser } = useAuthStore();
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Re-fetch user data when screen gets focus (e.g. after editing profile)
   useFocusEffect(
     useCallback(() => {
-      if (!user?.id) return;
-      supabase
-        .from('users')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-        .then(({ data }) => {
-          if (data) setUser(data);
-        });
+      refreshProfile();
     }, [user?.id])
   );
 
+  async function refreshProfile() {
+    if (!user?.id) return;
+    const { data } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+    if (data) setUser(data);
+  }
+
+  async function onRefresh() {
+    setRefreshing(true);
+    await refreshProfile();
+    setRefreshing(false);
+  }
+
   async function handleLogout() {
-    Alert.alert('Cerrar sesion', 'Estas seguro?', [
+    Alert.alert('Cerrar sesión', '¿Estás seguro?', [
       { text: 'Cancelar', style: 'cancel' },
       {
         text: 'Salir',
@@ -39,7 +47,12 @@ export default function ProfessionalProfileScreen() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-gray-50">
+    <ScrollView
+      className="flex-1 bg-gray-50"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#1A3C5E']} tintColor="#1A3C5E" />
+      }
+    >
       <View className="bg-secondary px-6 pt-14 pb-6">
         <Text className="text-2xl font-heading text-white">Mi perfil</Text>
       </View>
@@ -66,7 +79,7 @@ export default function ProfessionalProfileScreen() {
 
       <View className="mx-4 mt-4 gap-3">
         <TouchableOpacity
-          className="bg-white rounded-card p-4 flex-row items-center"
+          className="bg-white rounded-card p-4 flex-row items-center shadow-sm"
           onPress={() => router.push('/(professional)/edit-profile')}
         >
           <Text className="flex-1 font-body-medium text-secondary">Editar perfil</Text>
@@ -74,18 +87,18 @@ export default function ProfessionalProfileScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          className="bg-white rounded-card p-4 flex-row items-center"
-          onPress={() => {/* TODO */}}
+          className="bg-white rounded-card p-4 flex-row items-center shadow-sm"
+          onPress={() => Alert.alert('Próximamente', 'Esta función estará disponible pronto.')}
         >
-          <Text className="flex-1 font-body-medium text-secondary">Mis categorias y zonas</Text>
+          <Text className="flex-1 font-body-medium text-secondary">Mis categorías y zonas</Text>
           <Text className="text-gray-400">→</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          className="bg-white rounded-card p-4 flex-row items-center"
-          onPress={() => {/* TODO */}}
+          className="bg-white rounded-card p-4 flex-row items-center shadow-sm"
+          onPress={() => Alert.alert('Próximamente', 'Esta función estará disponible pronto.')}
         >
-          <Text className="flex-1 font-body-medium text-secondary">Mis resenas</Text>
+          <Text className="flex-1 font-body-medium text-secondary">Mis reseñas</Text>
           <Text className="text-gray-400">→</Text>
         </TouchableOpacity>
       </View>
@@ -95,7 +108,7 @@ export default function ProfessionalProfileScreen() {
           className="border border-red-200 rounded-card p-4 items-center"
           onPress={handleLogout}
         >
-          <Text className="text-red-500 font-body-medium">Cerrar sesion</Text>
+          <Text className="text-red-500 font-body-medium">Cerrar sesión</Text>
         </TouchableOpacity>
       </View>
 

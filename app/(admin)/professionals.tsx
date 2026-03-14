@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase';
 type Professional = {
   id: string;
   user_id: string;
+  bio: string | null;
   license_number: string | null;
   license_photo_url: string | null;
   dni_photo_url: string | null;
@@ -31,9 +32,15 @@ type Professional = {
   };
   categories: {
     category: {
+      id: string;
       name: string;
     };
   }[];
+};
+
+type Category = {
+  id: string;
+  name: string;
 };
 
 export default function ProfessionalsScreen() {
@@ -44,6 +51,18 @@ export default function ProfessionalsScreen() {
   const [selectedPro, setSelectedPro] = useState<Professional | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
+  // For category assignment on approval
+  const [allCategories, setAllCategories] = useState<Category[]>([]);
+  const [assignCategoryIds, setAssignCategoryIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    supabase
+      .from('categories')
+      .select('id, name')
+      .order('sort_order')
+      .then(({ data }) => setAllCategories(data ?? []));
+  }, []);
+
   async function loadProfessionals() {
     try {
       let query = supabase
@@ -51,7 +70,7 @@ export default function ProfessionalsScreen() {
         .select(`
           *,
           user:users!professionals_user_id_fkey(name, email, phone),
-          categories:professional_categories(category:categories(name))
+          categories:professional_categories(category:categories(id, name))
         `)
         .order('created_at', { ascending: false });
 
@@ -79,6 +98,19 @@ export default function ProfessionalsScreen() {
     loadProfessionals();
   }, [filter]);
 
+  // When selecting a professional, pre-fill their existing categories
+  function openDetail(pro: Professional) {
+    const existingIds = pro.categories?.map(c => c.category?.id).filter(Boolean) as string[] ?? [];
+    setAssignCategoryIds(existingIds);
+    setSelectedPro(pro);
+  }
+
+  function toggleCategory(id: string) {
+    setAssignCategoryIds((prev) =>
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
+    );
+  }
+
   async function onRefresh() {
     setRefreshing(true);
     await loadProfessionals();
@@ -86,6 +118,11 @@ export default function ProfessionalsScreen() {
   }
 
   async function handleApprove(pro: Professional) {
+    if (assignCategoryIds.length === 0) {
+      Alert.alert('Error', 'Asigná al menos una categoría antes de aprobar.');
+      return;
+    }
+
     Alert.alert(
       'Aprobar profesional',
       `¿Aprobar a ${pro.user?.name || 'este profesional'}?`,
@@ -95,6 +132,8 @@ export default function ProfessionalsScreen() {
           text: 'Aprobar',
           onPress: async () => {
             setActionLoading(true);
+
+            // 1. Update professional status
             const { error } = await supabase
               .from('professionals')
               .update({ verified: true, status: 'verified' })
@@ -102,11 +141,34 @@ export default function ProfessionalsScreen() {
 
             if (error) {
               Alert.alert('Error', error.message);
-            } else {
-              Alert.alert('Listo', `${pro.user?.name} fue aprobado ✅`);
-              setSelectedPro(null);
-              loadProfessionals();
+              setActionLoading(false);
+              return;
             }
+
+            // 2. Sync categories: delete old, insert new
+            await supabase
+              .from('professional_categories')
+              .delete()
+              .eq('professional_id', pro.id);
+
+            if (assignCategoryIds.length > 0) {
+              const rows = assignCategoryIds.map((catId) => ({
+                professional_id: pro.id,
+                category_id: catId,
+              }));
+              const { error: catError } = await supabase
+                .from('professional_categories')
+                .insert(rows);
+
+              if (catError) {
+                console.warn('Error assigning categories:', catError);
+                Alert.alert('Advertencia', 'Profesional aprobado pero hubo un error asignando categorías.');
+              }
+            }
+
+            Alert.alert('Listo', `${pro.user?.name} fue aprobado ✅`);
+            setSelectedPro(null);
+            loadProfessionals();
             setActionLoading(false);
           },
         },
@@ -163,7 +225,7 @@ export default function ProfessionalsScreen() {
 
     return (
       <TouchableOpacity
-        onPress={() => setSelectedPro(item)}
+        onPress={() => openDetail(item)}
         style={{
           backgroundColor: '#1E293B',
           borderRadius: 12,
@@ -277,9 +339,11 @@ export default function ProfessionalsScreen() {
                       Tel: {selectedPro.user.phone}
                     </Text>
                   )}
-                  <Text style={{ color: '#60A5FA', fontSize: 14, marginTop: 8 }}>
-                    Categorías: {selectedPro.categories?.map(c => c.category?.name).filter(Boolean).join(', ') || 'Sin categoría'}
-                  </Text>
+                  {selectedPro.bio && (
+                    <Text style={{ color: '#CBD5E1', fontSize: 13, marginTop: 8, fontStyle: 'italic' }}>
+                      "{selectedPro.bio}"
+                    </Text>
+                  )}
                   {selectedPro.license_number && (
                     <Text style={{ color: '#9CA3AF', fontSize: 14, marginTop: 4 }}>
                       Matrícula: {selectedPro.license_number}
@@ -288,6 +352,60 @@ export default function ProfessionalsScreen() {
                   <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 8 }}>
                     Registrado: {new Date(selectedPro.created_at).toLocaleDateString('es-AR')}
                   </Text>
+                </View>
+
+                {/* Category assignment */}
+                <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold', marginBottom: 8 }}>
+                  Categorías asignadas
+                </Text>
+                <Text style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 12 }}>
+                  {selectedPro.status === 'pending_verification'
+                    ? 'Revisá y ajustá las categorías antes de aprobar'
+                    : 'Categorías del profesional'}
+                </Text>
+
+                <View style={{ gap: 6, marginBottom: 16 }}>
+                  {allCategories.map((cat) => {
+                    const selected = assignCategoryIds.includes(cat.id);
+                    return (
+                      <TouchableOpacity
+                        key={cat.id}
+                        onPress={() => {
+                          if (selectedPro.status === 'pending_verification' || selectedPro.status === 'verified') {
+                            toggleCategory(cat.id);
+                          }
+                        }}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          backgroundColor: selected ? '#1E3A5F' : '#1E293B',
+                          borderRadius: 8,
+                          padding: 12,
+                          borderWidth: selected ? 1 : 0,
+                          borderColor: '#60A5FA',
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: 4,
+                            borderWidth: 2,
+                            borderColor: selected ? '#60A5FA' : '#4B5563',
+                            backgroundColor: selected ? '#60A5FA' : 'transparent',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginRight: 10,
+                          }}
+                        >
+                          {selected && (
+                            <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>✓</Text>
+                          )}
+                        </View>
+                        <Text style={{ color: 'white', fontSize: 14 }}>{cat.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
 
                 {/* Documents */}
@@ -349,7 +467,7 @@ export default function ProfessionalsScreen() {
                       }}
                     >
                       <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>
-                        Rechazar ✕
+                        Rechazar
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -367,7 +485,7 @@ export default function ProfessionalsScreen() {
                         <ActivityIndicator color="white" />
                       ) : (
                         <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>
-                          Aprobar ✓
+                          Aprobar
                         </Text>
                       )}
                     </TouchableOpacity>
@@ -375,9 +493,61 @@ export default function ProfessionalsScreen() {
                 )}
 
                 {selectedPro.status === 'verified' && (
-                  <View style={{ backgroundColor: '#D1FAE5', borderRadius: 12, padding: 16, marginTop: 16, alignItems: 'center' }}>
-                    <Text style={{ color: '#065F46', fontWeight: 'bold', fontSize: 16 }}>
-                      ✅ Profesional verificado
+                  <View style={{ marginTop: 16, marginBottom: 40 }}>
+                    <View style={{ backgroundColor: '#D1FAE5', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 12 }}>
+                      <Text style={{ color: '#065F46', fontWeight: 'bold', fontSize: 16 }}>
+                        Profesional verificado ✓
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={async () => {
+                        if (assignCategoryIds.length === 0) {
+                          Alert.alert('Error', 'Seleccioná al menos una categoría.');
+                          return;
+                        }
+                        setActionLoading(true);
+                        await supabase
+                          .from('professional_categories')
+                          .delete()
+                          .eq('professional_id', selectedPro.id);
+                        const rows = assignCategoryIds.map((catId) => ({
+                          professional_id: selectedPro.id,
+                          category_id: catId,
+                        }));
+                        const { error } = await supabase
+                          .from('professional_categories')
+                          .insert(rows);
+                        if (error) {
+                          Alert.alert('Error', error.message);
+                        } else {
+                          Alert.alert('Listo', 'Categorías actualizadas');
+                          loadProfessionals();
+                        }
+                        setActionLoading(false);
+                      }}
+                      disabled={actionLoading}
+                      style={{
+                        backgroundColor: '#3B82F6',
+                        borderRadius: 12,
+                        padding: 14,
+                        alignItems: 'center',
+                      }}
+                    >
+                      {actionLoading ? (
+                        <ActivityIndicator color="white" />
+                      ) : (
+                        <Text style={{ color: 'white', fontWeight: '600', fontSize: 14 }}>
+                          Actualizar categorías
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {selectedPro.status === 'suspended' && (
+                  <View style={{ backgroundColor: '#FEE2E2', borderRadius: 12, padding: 16, marginTop: 16, marginBottom: 40, alignItems: 'center' }}>
+                    <Text style={{ color: '#991B1B', fontWeight: 'bold', fontSize: 16 }}>
+                      Profesional suspendido
                     </Text>
                   </View>
                 )}

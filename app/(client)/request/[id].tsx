@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -15,6 +16,7 @@ type Proposal = {
   price: number;
   message: string | null;
   estimated_arrival: string | null;
+  professional_id: string;
   professionals: {
     rating_avg: number;
     rating_count: number;
@@ -26,12 +28,12 @@ export default function RequestDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [accepting, setAccepting] = useState<string | null>(null);
 
   useEffect(() => {
     fetchProposals();
 
-    // Suscribirse a nuevas propuestas en tiempo real
     const channel = supabase
       .channel(`request-${id}`)
       .on('postgres_changes', {
@@ -46,15 +48,24 @@ export default function RequestDetailScreen() {
   }, [id]);
 
   async function fetchProposals() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('proposals')
       .select('*, professionals(rating_avg, rating_count, jobs_completed)')
       .eq('request_id', id)
       .eq('status', 'pending')
       .order('price', { ascending: true });
 
+    if (error) {
+      console.warn('Error fetching proposals:', error);
+    }
     setProposals(data ?? []);
     setLoading(false);
+  }
+
+  async function onRefresh() {
+    setRefreshing(true);
+    await fetchProposals();
+    setRefreshing(false);
   }
 
   async function acceptProposal(proposal: Proposal) {
@@ -68,37 +79,49 @@ export default function RequestDetailScreen() {
           onPress: async () => {
             setAccepting(proposal.id);
 
-            // Crear el job
-            const { data: job, error } = await supabase
-              .from('jobs')
-              .insert({
-                request_id: id,
-                proposal_id: proposal.id,
-                // client_id y professional_id se obtienen de la propuesta en el trigger
-                agreed_price: proposal.price,
-              })
-              .select()
-              .single();
+            try {
+              // Create the job
+              const { data: job, error } = await supabase
+                .from('jobs')
+                .insert({
+                  request_id: id,
+                  proposal_id: proposal.id,
+                  client_id: (await supabase.auth.getUser()).data.user?.id,
+                  professional_id: proposal.professional_id,
+                  agreed_price: proposal.price,
+                })
+                .select()
+                .single();
 
-            if (error) {
+              if (error || !job) {
+                Alert.alert('Error', 'No se pudo aceptar la propuesta. Intentá de nuevo.');
+                setAccepting(null);
+                return;
+              }
+
+              // Update statuses
+              const results = await Promise.all([
+                supabase.from('proposals').update({ status: 'accepted' }).eq('id', proposal.id),
+                supabase.from('proposals').update({ status: 'rejected' }).eq('request_id', id).neq('id', proposal.id),
+                supabase.from('service_requests').update({ status: 'assigned' }).eq('id', id),
+              ]);
+
+              const statusErrors = results.filter(r => r.error);
+              if (statusErrors.length > 0) {
+                console.warn('Some status updates failed:', statusErrors);
+              }
+
               setAccepting(null);
-              Alert.alert('Error', 'No se pudo aceptar la propuesta');
-              return;
+              Alert.alert(
+                '¡Propuesta aceptada!',
+                'Se abrió el chat con el profesional para coordinar el trabajo.',
+                [{ text: 'Ir al chat', onPress: () => router.replace(`/(client)/job/${job.id}`) }]
+              );
+            } catch (e) {
+              console.warn('Error accepting proposal:', e);
+              Alert.alert('Error', 'Ocurrió un error inesperado. Intentá de nuevo.');
+              setAccepting(null);
             }
-
-            // Actualizar estados
-            await Promise.all([
-              supabase.from('proposals').update({ status: 'accepted' }).eq('id', proposal.id),
-              supabase.from('proposals').update({ status: 'rejected' }).eq('request_id', id).neq('id', proposal.id),
-              supabase.from('service_requests').update({ status: 'assigned' }).eq('id', id),
-            ]);
-
-            setAccepting(null);
-            Alert.alert(
-              '¡Propuesta aceptada!',
-              'Se abrió el chat con el profesional para coordinar el trabajo.',
-              [{ text: 'Ir al chat', onPress: () => router.replace(`/(client)/job/${job.id}`) }]
-            );
           },
         },
       ]
@@ -110,7 +133,12 @@ export default function RequestDetailScreen() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-gray-50">
+    <ScrollView
+      className="flex-1 bg-gray-50"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FF6B1A']} tintColor="#FF6B1A" />
+      }
+    >
       <View className="bg-white px-6 pt-14 pb-4 border-b border-gray-100">
         <TouchableOpacity onPress={() => router.back()}>
           <Text className="text-secondary font-body">← Volver</Text>
@@ -164,7 +192,7 @@ export default function RequestDetailScreen() {
                 {proposal.estimated_arrival && (
                   <View className="flex-row items-center mb-3">
                     <Text className="text-sm font-body text-gray-500">
-                      🕐 Disponibilidad: {proposal.estimated_arrival}
+                      Disponibilidad: {proposal.estimated_arrival}
                     </Text>
                   </View>
                 )}

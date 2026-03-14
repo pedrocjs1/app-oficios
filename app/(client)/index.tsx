@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -33,15 +33,14 @@ export default function ClientHomeScreen() {
   const { user } = useAuthStore();
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Refetch when screen gets focus (e.g. after creating a request)
   useFocusEffect(
     useCallback(() => {
       fetchRequests();
     }, [])
   );
 
-  // Real-time updates
   useEffect(() => {
     const channel = supabase
       .channel('client-requests')
@@ -57,19 +56,33 @@ export default function ClientHomeScreen() {
   }, []);
 
   async function fetchRequests() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('service_requests')
       .select('*, categories(name)')
       .eq('client_id', user?.id)
       .in('status', ['open', 'in_proposals', 'assigned', 'in_progress'])
       .order('created_at', { ascending: false });
 
+    if (error) {
+      console.warn('Error fetching requests:', error);
+    }
     setRequests(data ?? []);
     setLoading(false);
   }
 
+  async function onRefresh() {
+    setRefreshing(true);
+    await fetchRequests();
+    setRefreshing(false);
+  }
+
   return (
-    <ScrollView className="flex-1 bg-gray-50">
+    <ScrollView
+      className="flex-1 bg-gray-50"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FF6B1A']} tintColor="#FF6B1A" />
+      }
+    >
       {/* Header */}
       <View className="bg-white px-6 pt-14 pb-6">
         <Text className="text-sm font-body text-gray-500">Hola,</Text>

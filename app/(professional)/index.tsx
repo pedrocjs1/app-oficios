@@ -1,6 +1,13 @@
-import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { router } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
+} from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -25,10 +32,15 @@ export default function ProfessionalFeedScreen() {
   const { user } = useAuthStore();
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchRequests();
+    }, [])
+  );
 
   useEffect(() => {
-    fetchRequests();
-
     const channel = supabase
       .channel('professional-feed')
       .on('postgres_changes', {
@@ -42,19 +54,32 @@ export default function ProfessionalFeedScreen() {
   }, []);
 
   async function fetchRequests() {
-    // El RLS de Supabase filtra automáticamente por zonas y categorías del profesional
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('service_requests')
       .select('*, categories(name)')
       .eq('status', 'open')
       .order('created_at', { ascending: false });
 
+    if (error) {
+      console.warn('Error fetching requests:', error);
+    }
     setRequests(data ?? []);
     setLoading(false);
   }
 
+  async function onRefresh() {
+    setRefreshing(true);
+    await fetchRequests();
+    setRefreshing(false);
+  }
+
   return (
-    <ScrollView className="flex-1 bg-gray-50">
+    <ScrollView
+      className="flex-1 bg-gray-50"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#1A3C5E']} tintColor="#1A3C5E" />
+      }
+    >
       <View className="bg-secondary px-6 pt-14 pb-6">
         <Text className="text-sm font-body text-white/70">Hola,</Text>
         <Text className="text-2xl font-heading text-white">{user?.name ?? 'Profesional'} 👷</Text>
