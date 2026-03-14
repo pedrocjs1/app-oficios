@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { router, useFocusEffect } from 'expo-router';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
+import { SafeImage } from '@/components/SafeImage';
 
 export default function ClientProfileScreen() {
   const { user, setSession, setUser } = useAuthStore();
@@ -102,7 +103,7 @@ export default function ClientProfileScreen() {
         <View style={[styles.avatarCard, SHADOWS.md]}>
           <View style={styles.avatarContainer}>
             {user?.avatar_url ? (
-              <Image source={{ uri: user.avatar_url }} style={styles.avatar} />
+              <SafeImage uri={user.avatar_url} style={styles.avatar} fallbackIcon="person" />
             ) : (
               <View style={styles.avatarPlaceholder}>
                 <Text style={styles.avatarInitial}>

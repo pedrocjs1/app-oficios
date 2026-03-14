@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 import { CardSkeleton } from '@/components/SkeletonLoader';
+import { SafeImage } from '@/components/SafeImage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type ServiceRequest = {
@@ -119,9 +120,10 @@ export default function ClientHomeScreen() {
             }}
           >
             {user?.avatar_url ? (
-              <Image
-                source={{ uri: user.avatar_url }}
+              <SafeImage
+                uri={user.avatar_url}
                 style={{ width: 44, height: 44, borderRadius: 22 }}
+                fallbackIcon="person"
               />
             ) : (
               <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.primary }}>
