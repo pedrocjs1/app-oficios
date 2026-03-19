@@ -12,7 +12,7 @@ import {
   Image,
   ActivityIndicator,
 } from 'react-native';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/services/api';
 
 type Professional = {
   id: string;
@@ -56,38 +56,17 @@ export default function ProfessionalsScreen() {
   const [assignCategoryIds, setAssignCategoryIds] = useState<string[]>([]);
 
   useEffect(() => {
-    supabase
-      .from('categories')
-      .select('id, name')
-      .order('sort_order')
-      .then(({ data }) => setAllCategories(data ?? []));
+    api.getCategories()
+      .then((data) => setAllCategories(data ?? []))
+      .catch((e) => console.warn('Error loading categories:', e));
   }, []);
 
   async function loadProfessionals() {
     try {
-      let query = supabase
-        .from('professionals')
-        .select(`
-          *,
-          user:users!professionals_user_id_fkey(name, email, phone),
-          categories:professional_categories(category:categories(id, name))
-        `)
-        .order('created_at', { ascending: false });
-
-      if (filter === 'pending') {
-        query = query.eq('status', 'pending_verification');
-      } else if (filter === 'verified') {
-        query = query.eq('status', 'verified');
-      }
-
-      const { data, error } = await query;
-      if (error) {
-        console.warn('Error loading professionals:', error);
-        return;
-      }
+      const data = await api.getAdminProfessionals(filter);
       setProfessionals(data || []);
     } catch (e) {
-      console.warn('Error:', e);
+      console.warn('Error loading professionals:', e);
     } finally {
       setLoading(false);
     }
@@ -132,43 +111,14 @@ export default function ProfessionalsScreen() {
           text: 'Aprobar',
           onPress: async () => {
             setActionLoading(true);
-
-            // 1. Update professional status
-            const { error } = await supabase
-              .from('professionals')
-              .update({ verified: true, status: 'verified' })
-              .eq('id', pro.id);
-
-            if (error) {
-              Alert.alert('Error', error.message);
-              setActionLoading(false);
-              return;
+            try {
+              await api.approveProfessional(pro.id, assignCategoryIds);
+              Alert.alert('Listo', `${pro.user?.name} fue aprobado`);
+              setSelectedPro(null);
+              loadProfessionals();
+            } catch (e: any) {
+              Alert.alert('Error', e.message || 'No se pudo aprobar');
             }
-
-            // 2. Sync categories: delete old, insert new (uses admin client to bypass RLS)
-            await supabase
-              .from('professional_categories')
-              .delete()
-              .eq('professional_id', pro.id);
-
-            if (assignCategoryIds.length > 0) {
-              const rows = assignCategoryIds.map((catId) => ({
-                professional_id: pro.id,
-                category_id: catId,
-              }));
-              const { error: catError } = await supabase
-                .from('professional_categories')
-                .insert(rows);
-
-              if (catError) {
-                console.warn('Error assigning categories:', catError);
-                Alert.alert('Advertencia', 'Profesional aprobado pero hubo un error asignando categorías.');
-              }
-            }
-
-            Alert.alert('Listo', `${pro.user?.name} fue aprobado ✅`);
-            setSelectedPro(null);
-            loadProfessionals();
             setActionLoading(false);
           },
         },
@@ -187,17 +137,13 @@ export default function ProfessionalsScreen() {
           style: 'destructive',
           onPress: async () => {
             setActionLoading(true);
-            const { error } = await supabase
-              .from('professionals')
-              .update({ verified: false, status: 'suspended' })
-              .eq('id', pro.id);
-
-            if (error) {
-              Alert.alert('Error', error.message);
-            } else {
+            try {
+              await api.rejectProfessional(pro.id);
               Alert.alert('Listo', `${pro.user?.name} fue rechazado`);
               setSelectedPro(null);
               loadProfessionals();
+            } catch (e: any) {
+              Alert.alert('Error', e.message || 'No se pudo rechazar');
             }
             setActionLoading(false);
           },
@@ -506,22 +452,12 @@ export default function ProfessionalsScreen() {
                           return;
                         }
                         setActionLoading(true);
-                        await supabase
-                          .from('professional_categories')
-                          .delete()
-                          .eq('professional_id', selectedPro.id);
-                        const rows = assignCategoryIds.map((catId) => ({
-                          professional_id: selectedPro.id,
-                          category_id: catId,
-                        }));
-                        const { error } = await supabase
-                          .from('professional_categories')
-                          .insert(rows);
-                        if (error) {
-                          Alert.alert('Error', error.message);
-                        } else {
+                        try {
+                          await api.approveProfessional(selectedPro.id, assignCategoryIds);
                           Alert.alert('Listo', 'Categorías actualizadas');
                           loadProfessionals();
+                        } catch (e: any) {
+                          Alert.alert('Error', e.message || 'No se pudo actualizar');
                         }
                         setActionLoading(false);
                       }}

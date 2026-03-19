@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 
@@ -58,33 +58,14 @@ export default function EarningsScreen() {
   async function loadData() {
     if (!user?.id) return;
     try {
-      const { data: prof, error: profError } = await supabase
-        .from('professionals')
-        .select('id, balance_due, jobs_completed, rating_avg, rating_count')
-        .eq('user_id', user.id)
-        .single();
+      const data = await api.getEarnings();
 
-      if (profError || !prof) {
-        console.warn('Error loading professional data:', profError);
-        setLoading(false);
-        return;
+      if (data?.professional) {
+        setProfessional(data.professional);
       }
-
-      setProfessional(prof);
-
-      const { data: jobs } = await supabase
-        .from('jobs')
-        .select(`
-          id, agreed_price, payment_method, confirmed_at, status,
-          service_requests(categories(name)),
-          reviews(rating)
-        `)
-        .eq('professional_id', prof.id)
-        .eq('status', 'confirmed')
-        .order('confirmed_at', { ascending: false })
-        .limit(20);
-
-      setCompletedJobs((jobs as CompletedJob[]) ?? []);
+      if (data?.completed_jobs) {
+        setCompletedJobs(data.completed_jobs);
+      }
     } catch (e) {
       console.warn('Error loading earnings:', e);
     } finally {

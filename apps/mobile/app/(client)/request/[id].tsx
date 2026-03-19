@@ -13,6 +13,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
+import { api } from '@/services/api';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 
 type Proposal = {
@@ -70,27 +71,22 @@ export default function RequestDetailScreen() {
   }, [id]);
 
   async function checkExistingJob() {
-    const { data } = await supabase
-      .from('jobs')
-      .select('id')
-      .eq('request_id', id)
-      .limit(1)
-      .maybeSingle();
-    if (data) setExistingJobId(data.id);
+    try {
+      const jobs = await api.getJobs();
+      const job = jobs?.find((j: any) => j.request_id === id);
+      if (job) setExistingJobId(job.id);
+    } catch (e) {
+      console.warn('Error checking existing job:', e);
+    }
   }
 
   async function fetchProposals() {
-    const { data, error } = await supabase
-      .from('proposals')
-      .select('*, professionals(rating_avg, rating_count, jobs_completed)')
-      .eq('request_id', id)
-      .eq('status', 'pending')
-      .order('price', { ascending: true });
-
-    if (error) {
+    try {
+      const data = await api.getProposals(id!);
+      setProposals(data ?? []);
+    } catch (error) {
       console.warn('Error fetching proposals:', error);
     }
-    setProposals(data ?? []);
     setLoading(false);
   }
 
@@ -112,44 +108,17 @@ export default function RequestDetailScreen() {
             setAccepting(proposal.id);
 
             try {
-              const { data: job, error } = await supabase
-                .from('jobs')
-                .insert({
-                  request_id: id,
-                  proposal_id: proposal.id,
-                  client_id: (await supabase.auth.getUser()).data.user?.id,
-                  professional_id: proposal.professional_id,
-                  agreed_price: proposal.price,
-                })
-                .select()
-                .single();
-
-              if (error || !job) {
-                Alert.alert('Error', 'No se pudo aceptar la propuesta. Intentá de nuevo.');
-                setAccepting(null);
-                return;
-              }
-
-              const results = await Promise.all([
-                supabase.from('proposals').update({ status: 'accepted' }).eq('id', proposal.id),
-                supabase.from('proposals').update({ status: 'rejected' }).eq('request_id', id).neq('id', proposal.id),
-                supabase.from('service_requests').update({ status: 'in_progress' }).eq('id', id),
-              ]);
-
-              const statusErrors = results.filter(r => r.error);
-              if (statusErrors.length > 0) {
-                console.warn('Some status updates failed:', statusErrors);
-              }
+              const result = await api.acceptProposal(proposal.id);
 
               setAccepting(null);
               Alert.alert(
                 '¡Propuesta aceptada!',
                 'Se abrió el chat con el profesional para coordinar el trabajo.',
-                [{ text: 'Ir al chat', onPress: () => router.replace(`/(client)/job/${job.id}`) }]
+                [{ text: 'Ir al chat', onPress: () => router.replace(`/(client)/job/${result.job?.id || result.id}`) }]
               );
-            } catch (e) {
+            } catch (e: any) {
               console.warn('Error accepting proposal:', e);
-              Alert.alert('Error', 'Ocurrió un error inesperado. Intentá de nuevo.');
+              Alert.alert('Error', e.message || 'Ocurrió un error inesperado. Intentá de nuevo.');
               setAccepting(null);
             }
           },

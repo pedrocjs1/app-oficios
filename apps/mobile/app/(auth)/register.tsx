@@ -17,6 +17,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
+import { api } from '@/services/api';
+import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 
 export default function RegisterScreen() {
@@ -28,6 +30,8 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const { setToken, setUser } = useAuthStore();
+
   async function handleRegister() {
     if (!name || !email || !password) {
       Alert.alert('Error', 'Completa nombre, email y contrasena');
@@ -36,28 +40,22 @@ export default function RegisterScreen() {
 
     setLoading(true);
 
-    const { data, error } = await supabase.auth.signUp({ email, password });
-
-    if (error) {
-      setLoading(false);
-      Alert.alert('Error', error.message);
-      return;
-    }
-
-    if (data.user) {
-      const { error: profileError } = await supabase.from('users').insert({
-        id: data.user.id,
+    try {
+      // 1. Register via our backend API
+      const { user, token } = await api.register({
         email,
+        password,
         name,
         phone: phone || null,
         role: 'client',
       });
+      setToken(token);
+      setUser(user);
 
-      if (profileError) {
-        setLoading(false);
-        Alert.alert('Error', 'No se pudo crear el perfil. Intenta de nuevo.');
-        return;
-      }
+      // 2. Also sign into Supabase for realtime subscriptions
+      await supabase.auth.signInWithPassword({ email, password });
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'No se pudo crear la cuenta. Intenta de nuevo.');
     }
 
     setLoading(false);

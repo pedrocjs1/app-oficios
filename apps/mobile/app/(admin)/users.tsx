@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/services/api';
 import { COLORS, SHADOWS, RADIUS, SPACING } from '@/constants/theme';
 
 type UserItem = {
@@ -35,27 +35,13 @@ export default function UsersScreen() {
 
   async function loadUsers() {
     try {
-      let query = supabase
-        .from('users')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (roleFilter !== 'all') {
-        query = query.eq('role', roleFilter);
-      }
-
-      if (search.trim()) {
-        query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
-      }
-
-      const { data, error } = await query;
-      if (error) {
-        console.warn('Error loading users:', error);
-        return;
-      }
+      const data = await api.getAdminUsers({
+        role: roleFilter,
+        search: search.trim() || undefined,
+      });
       setUsers(data || []);
     } catch (e) {
-      console.warn('Error:', e);
+      console.warn('Error loading users:', e);
     } finally {
       setLoading(false);
     }

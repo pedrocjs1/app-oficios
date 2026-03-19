@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/services/api';
 import { COLORS, SHADOWS, RADIUS, SPACING } from '@/constants/theme';
 
 type ServiceRequest = {
@@ -49,30 +49,10 @@ export default function RequestsScreen() {
 
   async function loadRequests() {
     try {
-      let query = supabase
-        .from('service_requests')
-        .select(`
-          *,
-          client:users!service_requests_client_id_fkey(name, email),
-          category:categories(name)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      if (filter === 'active') {
-        query = query.in('status', ['open', 'in_proposals', 'assigned', 'in_progress']);
-      } else if (filter === 'completed') {
-        query = query.in('status', ['completed', 'cancelled']);
-      }
-
-      const { data, error } = await query;
-      if (error) {
-        console.warn('Error loading requests:', error);
-        return;
-      }
+      const data = await api.getAdminRequests(filter);
       setRequests(data || []);
     } catch (e) {
-      console.warn('Error:', e);
+      console.warn('Error loading requests:', e);
     } finally {
       setLoading(false);
     }

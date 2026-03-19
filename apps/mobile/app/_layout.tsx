@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text } from 'react-native';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase';
+import { api } from '@/services/api';
 
 let cssLoaded = false;
 try {
@@ -21,7 +22,7 @@ export const unstable_settings = {
 export default function RootLayout() {
   const [appReady, setAppReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { setSession, setUser } = useAuthStore();
+  const { setSession, setUser, setToken } = useAuthStore();
 
   // Marcar app como lista inmediatamente (sin depender de SplashScreen)
   useEffect(() => {
@@ -36,12 +37,21 @@ export default function RootLayout() {
     })();
   }, []);
 
-  // Escuchar cambios de sesión de Supabase
+  // Escuchar cambios de sesion de Supabase (for realtime + session restore)
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session?.user) {
-        fetchUserProfile(session.user.id);
+        // Use the Supabase access token as our backend token initially
+        // until the user logs in through our backend
+        const existingToken = useAuthStore.getState().token;
+        if (!existingToken && session.access_token) {
+          // We don't have our own backend token yet, but we have a Supabase session
+          // Try to fetch user profile via Supabase as fallback
+          fetchUserProfileSupabase(session.user.id);
+        } else if (existingToken) {
+          fetchUserProfileApi();
+        }
       }
     }).catch((e: any) => {
       console.warn('getSession error:', e);
@@ -50,9 +60,15 @@ export default function RootLayout() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session?.user) {
-        fetchUserProfile(session.user.id);
+        const existingToken = useAuthStore.getState().token;
+        if (existingToken) {
+          fetchUserProfileApi();
+        } else {
+          fetchUserProfileSupabase(session.user.id);
+        }
       } else {
         setUser(null);
+        setToken(null);
         try {
           router.replace('/(auth)/login');
         } catch {}
@@ -90,7 +106,26 @@ export default function RootLayout() {
   );
 }
 
-async function fetchUserProfile(userId: string) {
+async function fetchUserProfileApi() {
+  try {
+    const { setUser } = useAuthStore.getState();
+    const { user } = await api.getMe();
+
+    if (user) {
+      setUser(user);
+      routeByRole(user.role);
+    }
+  } catch (e) {
+    console.warn('Error fetching user profile via API:', e);
+    // Fallback to Supabase if API fails
+    const session = useAuthStore.getState().session;
+    if (session?.user) {
+      fetchUserProfileSupabase(session.user.id);
+    }
+  }
+}
+
+async function fetchUserProfileSupabase(userId: string) {
   try {
     const { setUser } = useAuthStore.getState();
 
@@ -102,15 +137,19 @@ async function fetchUserProfile(userId: string) {
 
     if (data) {
       setUser(data);
-      if (data.role === 'admin') {
-        router.replace('/(admin)');
-      } else if (data.role === 'professional' || data.role === 'both') {
-        router.replace('/(professional)');
-      } else {
-        router.replace('/(client)');
-      }
+      routeByRole(data.role);
     }
   } catch (e) {
     console.warn('Error fetching user profile:', e);
+  }
+}
+
+function routeByRole(role: string) {
+  if (role === 'admin') {
+    router.replace('/(admin)');
+  } else if (role === 'professional' || role === 'both') {
+    router.replace('/(professional)');
+  } else {
+    router.replace('/(client)');
   }
 }

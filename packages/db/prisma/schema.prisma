@@ -7,261 +7,317 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── Users ───────────────────────────────────────────────────────────────────
-
 model User {
-  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email         String   @unique
-  phone         String?
-  phoneHash     String?  @map("phone_hash")
-  name          String
-  avatarUrl     String?  @map("avatar_url")
-  role          String   // client | professional | both | admin
-  location      String?
-  pushToken     String?  @map("push_token")
-  passwordHash  String?  @map("password_hash")
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz
-
-  professional       Professional?
-  serviceRequests    ServiceRequest[]
-  jobsAsClient       Job[]       @relation("JobClient")
-  jobsAsProfessional Job[]       @relation("JobProfessional")
-  messages           Message[]
-  reviewsGiven       Review[]    @relation("ReviewReviewer")
-  reviewsReceived    Review[]    @relation("ReviewReviewed")
-  disputes           Dispute[]
+  id              String                    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  email           String?                   @unique
+  phone           String?
+  phoneHash       String?                   @map("phone_hash")
+  name            String
+  avatarUrl       String?                   @map("avatar_url")
+  role            user_role?                @default(client)
+  location        Unsupported("geography")?
+  pushToken       String?                   @map("push_token")
+  createdAt       DateTime?                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime?                 @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  passwordHash    String?                   @map("password_hash")
+  disputes        Dispute[]
+  jobsAsClient    Job[]                     @relation("JobClient")
+  messages        Message[]
+  professional    Professional?
+  reviewsReceived Review[]                  @relation("ReviewReviewed")
+  reviewsGiven    Review[]                  @relation("ReviewReviewer")
+  serviceRequests ServiceRequest[]
 
   @@map("users")
 }
 
-// ─── Professionals ───────────────────────────────────────────────────────────
-
 model Professional {
-  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId          String   @unique @map("user_id") @db.Uuid
-  licenseNumber   String   @map("license_number")
-  licensePhotoUrl String?  @map("license_photo_url")
-  dniPhotoUrl     String?  @map("dni_photo_url")
-  selfieUrl       String?  @map("selfie_url")
-  bio             String?
-  verified        Boolean
-  status          String   // pending_verification | verified | suspended
-  ratingAvg       Decimal  @default(0) @map("rating_avg")
-  ratingCount     Int      @default(0) @map("rating_count")
-  jobsCompleted   Int      @default(0) @map("jobs_completed")
-  balanceDue      Decimal  @default(0) @map("balance_due")
-  mpAccountId     String?  @map("mp_account_id")
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
-
-  user       User                   @relation(fields: [userId], references: [id])
-  categories ProfessionalCategory[]
-  zones      ProfessionalZone[]
-  proposals  Proposal[]
+  id                 String                 @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId             String?                @unique @map("user_id") @db.Uuid
+  licenseNumber      String?                @map("license_number")
+  licensePhotoUrl    String?                @map("license_photo_url")
+  dniPhotoUrl        String?                @map("dni_photo_url")
+  selfieUrl          String?                @map("selfie_url")
+  bio                String?
+  verified           Boolean?               @default(false)
+  status             professional_status?   @default(pending_verification)
+  ratingAvg          Decimal?               @default(0) @map("rating_avg") @db.Decimal(3, 2)
+  ratingCount        Int?                   @default(0) @map("rating_count")
+  jobsCompleted      Int?                   @default(0) @map("jobs_completed")
+  balanceDue         Decimal?               @default(0) @map("balance_due") @db.Decimal(12, 2)
+  mpAccountId        String?                @map("mp_account_id")
+  createdAt          DateTime?              @default(now()) @map("created_at") @db.Timestamptz(6)
+  jobsAsProfessional Job[]                  @relation("JobProfessional")
+  categories         ProfessionalCategory[]
+  zones              ProfessionalZone[]
+  user               User?                  @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  proposals          Proposal[]
 
   @@map("professionals")
 }
 
-// ─── Categories ──────────────────────────────────────────────────────────────
-
 model Category {
-  id             String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name           String
-  slug           String
-  iconUrl        String? @map("icon_url")
-  commonProblems Json?   @map("common_problems")
-  isLicensed     Boolean @map("is_licensed")
-  sortOrder      Int     @map("sort_order")
-
+  id              String                 @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name            String
+  slug            String                 @unique
+  iconUrl         String?                @map("icon_url")
+  commonProblems  Json?                  @default("[]") @map("common_problems")
+  isLicensed      Boolean?               @default(false) @map("is_licensed")
+  sortOrder       Int?                   @default(0) @map("sort_order")
   professionals   ProfessionalCategory[]
   serviceRequests ServiceRequest[]
 
   @@map("categories")
 }
 
-// ─── Service Zones ───────────────────────────────────────────────────────────
-
 model ServiceZone {
-  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name      String
-  city      String
-  province  String
-  country   String  @default("AR")
-  boundary  String? // PostGIS POLYGON stored as hex
-
+  id            String                    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name          String
+  city          String
+  province      String
+  country       String?                   @default("AR")
+  boundary      Unsupported("geography")?
   professionals ProfessionalZone[]
 
+  @@index([boundary], map: "idx_zones_boundary", type: Gist)
   @@map("service_zones")
 }
 
-// ─── Professional Categories (many-to-many) ──────────────────────────────────
-
 model ProfessionalCategory {
-  professionalId String @map("professional_id") @db.Uuid
-  categoryId     String @map("category_id") @db.Uuid
-
-  professional Professional @relation(fields: [professionalId], references: [id])
-  category     Category     @relation(fields: [categoryId], references: [id])
+  professionalId String       @map("professional_id") @db.Uuid
+  categoryId     String       @map("category_id") @db.Uuid
+  category       Category     @relation(fields: [categoryId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  professional   Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@id([professionalId, categoryId])
   @@map("professional_categories")
 }
 
-// ─── Professional Zones (many-to-many) ───────────────────────────────────────
-
 model ProfessionalZone {
-  professionalId String @map("professional_id") @db.Uuid
-  zoneId         String @map("zone_id") @db.Uuid
-
-  professional Professional @relation(fields: [professionalId], references: [id])
-  zone         ServiceZone  @relation(fields: [zoneId], references: [id])
+  professionalId String       @map("professional_id") @db.Uuid
+  zoneId         String       @map("zone_id") @db.Uuid
+  professional   Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  zone           ServiceZone  @relation(fields: [zoneId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@id([professionalId, zoneId])
+  @@index([zoneId], map: "idx_professional_zones")
   @@map("professional_zones")
 }
 
-// ─── Service Requests ────────────────────────────────────────────────────────
-
 model ServiceRequest {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  clientId       String    @map("client_id") @db.Uuid
-  categoryId     String    @map("category_id") @db.Uuid
-  problemType    String    @map("problem_type")
-  description    String
-  photos         String?   // JSON string, not native JSONB
-  urgency        String    // low | normal | medium | high | emergency
-  location       String?   // PostGIS POINT stored as hex
-  addressText    String?   @map("address_text")
-  status         String    // open | in_proposals | assigned | in_progress | completed | cancelled
-  maxProposals   Int       @default(5) @map("max_proposals")
-  proposalsCount Int       @default(0) @map("proposals_count")
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  expiresAt      DateTime? @map("expires_at") @db.Timestamptz
+  id             String                    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  clientId       String?                   @map("client_id") @db.Uuid
+  categoryId     String?                   @map("category_id") @db.Uuid
+  problemType    String                    @map("problem_type")
+  description    String?
+  photos         Json?                     @default("[]")
+  urgency        urgency_level?            @default(normal)
+  location       Unsupported("geography")?
+  addressText    String?                   @map("address_text")
+  status         request_status?           @default(open)
+  maxProposals   Int?                      @default(5) @map("max_proposals")
+  proposalsCount Int?                      @default(0) @map("proposals_count")
+  createdAt      DateTime?                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt      DateTime?                 @default(dbgenerated("(now() + '24:00:00'::interval)")) @map("expires_at") @db.Timestamptz(6)
+  jobs           Job[]
+  proposals      Proposal[]
+  category       Category?                 @relation(fields: [categoryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  client         User?                     @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  client    User       @relation(fields: [clientId], references: [id])
-  category  Category   @relation(fields: [categoryId], references: [id])
-  proposals Proposal[]
-  jobs      Job[]
-
+  @@index([location], map: "idx_requests_location", type: Gist)
+  @@index([status], map: "idx_requests_status")
   @@map("service_requests")
 }
 
-// ─── Proposals ───────────────────────────────────────────────────────────────
-
 model Proposal {
-  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  requestId        String   @map("request_id") @db.Uuid
-  professionalId   String   @map("professional_id") @db.Uuid
-  price            Decimal
-  message          String
-  estimatedArrival String?  @map("estimated_arrival")
-  status           String   // pending | accepted | rejected | withdrawn
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  id               String           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  requestId        String?          @map("request_id") @db.Uuid
+  professionalId   String?          @map("professional_id") @db.Uuid
+  price            Decimal          @db.Decimal(12, 2)
+  message          String?
+  estimatedArrival String?          @map("estimated_arrival")
+  status           proposal_status? @default(pending)
+  createdAt        DateTime?        @default(now()) @map("created_at") @db.Timestamptz(6)
+  jobs             Job[]
+  professional     Professional?    @relation(fields: [professionalId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  request          ServiceRequest?  @relation(fields: [requestId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  request      ServiceRequest @relation(fields: [requestId], references: [id])
-  professional Professional   @relation(fields: [professionalId], references: [id])
-  jobs         Job[]
-
+  @@unique([requestId, professionalId])
+  @@index([requestId], map: "idx_proposals_request")
   @@map("proposals")
 }
 
-// ─── Jobs ────────────────────────────────────────────────────────────────────
-
 model Job {
-  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  requestId          String    @map("request_id") @db.Uuid
-  proposalId         String    @map("proposal_id") @db.Uuid
-  clientId           String    @map("client_id") @db.Uuid
-  professionalId     String    @map("professional_id") @db.Uuid
-  agreedPrice        Decimal   @map("agreed_price")
-  paymentMethod      String?   @map("payment_method")
-  status             String    // pending_start | in_progress | completed_by_professional | confirmed | disputed
-  startedAt          DateTime? @map("started_at") @db.Timestamptz
-  completedAt        DateTime? @map("completed_at") @db.Timestamptz
-  confirmedAt        DateTime? @map("confirmed_at") @db.Timestamptz
-  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  professionalPhotos Json?     @map("professional_photos")
-  ratedAt            DateTime? @map("rated_at") @db.Timestamptz
+  id                 String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  requestId          String?         @map("request_id") @db.Uuid
+  proposalId         String?         @map("proposal_id") @db.Uuid
+  clientId           String?         @map("client_id") @db.Uuid
+  professionalId     String?         @map("professional_id") @db.Uuid
+  agreedPrice        Decimal         @map("agreed_price") @db.Decimal(12, 2)
+  paymentMethod      payment_method? @map("payment_method")
+  status             job_status?     @default(pending_start)
+  startedAt          DateTime?       @map("started_at") @db.Timestamptz(6)
+  completedAt        DateTime?       @map("completed_at") @db.Timestamptz(6)
+  confirmedAt        DateTime?       @map("confirmed_at") @db.Timestamptz(6)
+  createdAt          DateTime?       @default(now()) @map("created_at") @db.Timestamptz(6)
+  professionalPhotos Json?           @default("[]") @map("professional_photos")
+  ratedAt            DateTime?       @map("rated_at") @db.Timestamptz(6)
+  disputes           Dispute?
+  client             User?           @relation("JobClient", fields: [clientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  professional       Professional?   @relation("JobProfessional", fields: [professionalId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  proposal           Proposal?       @relation(fields: [proposalId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  request            ServiceRequest? @relation(fields: [requestId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  messages           Message[]
+  payments           Payment?
+  reviews            Review[]
 
-  request      ServiceRequest @relation(fields: [requestId], references: [id])
-  proposal     Proposal       @relation(fields: [proposalId], references: [id])
-  client       User           @relation("JobClient", fields: [clientId], references: [id])
-  professional User           @relation("JobProfessional", fields: [professionalId], references: [id])
-  messages     Message[]
-  reviews      Review[]
-  payments     Payment[]
-  disputes     Dispute[]
-
+  @@index([clientId], map: "idx_jobs_client")
+  @@index([professionalId], map: "idx_jobs_professional")
   @@map("jobs")
 }
 
-// ─── Messages ────────────────────────────────────────────────────────────────
-
 model Message {
-  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  jobId           String   @map("job_id") @db.Uuid
-  senderId        String   @map("sender_id") @db.Uuid
+  id              String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  jobId           String?   @map("job_id") @db.Uuid
+  senderId        String?   @map("sender_id") @db.Uuid
   content         String
-  originalContent String?  @map("original_content")
-  flagged         Boolean  @default(false)
-  flagReason      String?  @map("flag_reason")
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  originalContent String?   @map("original_content")
+  flagged         Boolean?  @default(false)
+  flagReason      String?   @map("flag_reason")
+  createdAt       DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  job             Job?      @relation(fields: [jobId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  sender          User?     @relation(fields: [senderId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
-  job    Job  @relation(fields: [jobId], references: [id])
-  sender User @relation(fields: [senderId], references: [id])
-
+  @@index([jobId], map: "idx_messages_job")
   @@map("messages")
 }
 
-// ─── Reviews ─────────────────────────────────────────────────────────────────
-
 model Review {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  jobId      String   @map("job_id") @db.Uuid
-  reviewerId String   @map("reviewer_id") @db.Uuid
-  reviewedId String   @map("reviewed_id") @db.Uuid
-  rating     Int
+  id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  jobId      String?   @map("job_id") @db.Uuid
+  reviewerId String?   @map("reviewer_id") @db.Uuid
+  reviewedId String?   @map("reviewed_id") @db.Uuid
+  rating     Int?
   comment    String?
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdAt  DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  job        Job?      @relation(fields: [jobId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reviewed   User?     @relation("ReviewReviewed", fields: [reviewedId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reviewer   User?     @relation("ReviewReviewer", fields: [reviewerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
-  job      Job  @relation(fields: [jobId], references: [id])
-  reviewer User @relation("ReviewReviewer", fields: [reviewerId], references: [id])
-  reviewed User @relation("ReviewReviewed", fields: [reviewedId], references: [id])
-
+  @@unique([jobId, reviewerId])
   @@map("reviews")
 }
 
-// ─── Payments ────────────────────────────────────────────────────────────────
-
 model Payment {
-  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  jobId              String    @map("job_id") @db.Uuid
-  amount             Decimal
-  commissionRate     Decimal?  @map("commission_rate")
-  commissionAmount   Decimal?  @map("commission_amount")
-  netToProfessional  Decimal?  @map("net_to_professional")
-  status             String
-  createdAt          DateTime? @default(now()) @map("created_at") @db.Timestamptz
-
-  job Job @relation(fields: [jobId], references: [id])
+  id                String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  jobId             String?         @unique @map("job_id") @db.Uuid
+  amount            Decimal         @db.Decimal(12, 2)
+  commissionRate    Decimal         @map("commission_rate") @db.Decimal(5, 4)
+  commissionAmount  Decimal         @map("commission_amount") @db.Decimal(12, 2)
+  netToProfessional Decimal         @map("net_to_professional") @db.Decimal(12, 2)
+  mp_payment_id     String?
+  mp_transfer_id    String?
+  status            payment_status? @default(pending)
+  method            payment_method
+  createdAt         DateTime?       @default(now()) @map("created_at") @db.Timestamptz(6)
+  released_at       DateTime?       @db.Timestamptz(6)
+  job               Job?            @relation(fields: [jobId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@map("payments")
 }
 
-// ─── Disputes ────────────────────────────────────────────────────────────────
-
 model Dispute {
-  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  jobId      String    @map("job_id") @db.Uuid
-  openedBy   String    @map("opened_by") @db.Uuid
-  reason     String
-  evidence   String?
-  status     String
-  resolution String?
-  createdAt  DateTime? @default(now()) @map("created_at") @db.Timestamptz
-
-  job    Job  @relation(fields: [jobId], references: [id])
-  opener User @relation(fields: [openedBy], references: [id])
+  id          String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  jobId       String?             @unique @map("job_id") @db.Uuid
+  openedBy    String?             @map("opened_by") @db.Uuid
+  reason      String
+  evidence    Json?               @default("[]")
+  status      dispute_status?     @default(open)
+  resolution  dispute_resolution?
+  admin_notes String?
+  createdAt   DateTime?           @default(now()) @map("created_at") @db.Timestamptz(6)
+  resolved_at DateTime?           @db.Timestamptz(6)
+  job         Job?                @relation(fields: [jobId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  opener      User?               @relation(fields: [openedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@map("disputes")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model spatial_ref_sys {
+  srid      Int     @id
+  auth_name String? @db.VarChar(256)
+  auth_srid Int?
+  srtext    String? @db.VarChar(2048)
+  proj4text String? @db.VarChar(2048)
+}
+
+enum dispute_resolution {
+  refund_full
+  refund_partial
+  released_to_professional
+  no_action
+}
+
+enum dispute_status {
+  open
+  under_review
+  resolved
+}
+
+enum job_status {
+  pending_start
+  in_progress
+  completed_by_professional
+  confirmed
+  disputed
+}
+
+enum payment_method {
+  digital
+  cash
+}
+
+enum payment_status {
+  pending
+  held
+  released
+  refunded
+  failed
+}
+
+enum professional_status {
+  pending_verification
+  verified
+  suspended
+}
+
+enum proposal_status {
+  pending
+  viewed
+  accepted
+  rejected
+  expired
+}
+
+enum request_status {
+  open
+  in_proposals
+  assigned
+  in_progress
+  completed
+  cancelled
+}
+
+enum urgency_level {
+  normal
+  urgent
+  emergency
+}
+
+enum user_role {
+  client
+  professional
+  both
+  admin
 }

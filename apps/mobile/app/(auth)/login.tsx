@@ -14,6 +14,8 @@ import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
+import { api } from '@/services/api';
+import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -24,15 +26,26 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const insets = useSafeAreaInsets();
 
+  const { setToken, setUser } = useAuthStore();
+
   async function handleLogin() {
     if (!email || !password) {
       Alert.alert('Error', 'Completá todos los campos');
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    try {
+      // 1. Login via our backend API
+      const { user, token } = await api.login(email, password);
+      setToken(token);
+      setUser(user);
+
+      // 2. Also sign into Supabase for realtime subscriptions
+      await supabase.auth.signInWithPassword({ email, password });
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Error al iniciar sesión');
+    }
     setLoading(false);
-    if (error) Alert.alert('Error', error.message);
   }
 
   return (

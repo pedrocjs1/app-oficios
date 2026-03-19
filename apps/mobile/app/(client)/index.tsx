@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
+import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 import { CardSkeleton } from '@/components/SkeletonLoader';
@@ -61,14 +62,12 @@ export default function ClientHomeScreen() {
   }, []);
 
   async function fetchRequests() {
-    const { data } = await supabase
-      .from('service_requests')
-      .select('*, categories(name)')
-      .eq('client_id', user?.id)
-      .in('status', ['open', 'in_proposals', 'assigned', 'in_progress'])
-      .order('created_at', { ascending: false });
-
-    setRequests(data ?? []);
+    try {
+      const data = await api.getRequests({ status: 'active' });
+      setRequests(data ?? []);
+    } catch (e) {
+      console.warn('Error fetching requests:', e);
+    }
     setLoading(false);
   }
 
@@ -230,16 +229,14 @@ export default function ClientHomeScreen() {
                   onPress={async () => {
                     if (req.status === 'assigned' || req.status === 'in_progress') {
                       // Find the active job for this request and navigate to it
-                      const { data: job } = await supabase
-                        .from('jobs')
-                        .select('id')
-                        .eq('request_id', req.id)
-                        .limit(1)
-                        .maybeSingle();
-                      if (job) {
-                        router.push(`/(client)/job/${job.id}`);
-                        return;
-                      }
+                      try {
+                        const jobs = await api.getJobs();
+                        const job = jobs?.find((j: any) => j.request_id === req.id);
+                        if (job) {
+                          router.push(`/(client)/job/${job.id}`);
+                          return;
+                        }
+                      } catch {}
                     }
                     router.push(`/(client)/request/${req.id}`);
                   }}

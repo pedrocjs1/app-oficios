@@ -17,7 +17,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 import { SafeImage } from '@/components/SafeImage';
@@ -85,31 +85,20 @@ export default function ProfessionalRequestScreen() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: req }, { data: prof }] = await Promise.all([
-        supabase
-          .from('service_requests')
-          .select('*, categories(name)')
-          .eq('id', id)
-          .single(),
-        supabase
-          .from('professionals')
-          .select('id')
-          .eq('user_id', user?.id)
-          .single(),
-      ]);
+      try {
+        const req = await api.getRequest(id!);
+        setRequest(req);
 
-      setRequest(req);
-
-      if (prof) {
-        const { data: existing } = await supabase
-          .from('proposals')
-          .select('id')
-          .eq('request_id', id)
-          .eq('professional_id', prof.id)
-          .single();
-        setAlreadyProposed(!!existing);
+        // Check if already proposed - the request response may include this info
+        // or we check the proposals list
+        try {
+          const proposals = await api.getProposals(id!);
+          const myProposal = proposals?.find((p: any) => p.professional_id && user?.id);
+          setAlreadyProposed(!!myProposal);
+        } catch {}
+      } catch (e) {
+        console.warn('Error loading request:', e);
       }
-
       setLoading(false);
     }
     load();
@@ -129,55 +118,21 @@ export default function ProfessionalRequestScreen() {
 
     setSubmitting(true);
 
-    const { data: prof } = await supabase
-      .from('professionals')
-      .select('id, balance_due, status, verified')
-      .eq('user_id', user?.id)
-      .single();
+    try {
+      await api.createProposal(id!, {
+        price: numPrice,
+        message: message || null,
+        estimated_arrival: eta,
+      });
 
-    if (!prof) {
       setSubmitting(false);
-      Alert.alert('Error', 'No se encontró tu perfil profesional');
-      return;
-    }
-
-    if (prof.status !== 'verified' || !prof.verified) {
+      Alert.alert('¡Propuesta enviada!', 'El cliente será notificado.', [
+        { text: 'Volver', onPress: () => router.back() },
+      ]);
+    } catch (e: any) {
       setSubmitting(false);
-      Alert.alert(
-        'Perfil no verificado',
-        'Tu perfil debe estar verificado para enviar propuestas. Esperá la aprobación del equipo de OficioYa.'
-      );
-      return;
+      Alert.alert('Error', e.message || 'No se pudo enviar la propuesta');
     }
-
-    if (prof.balance_due > 0) {
-      setSubmitting(false);
-      Alert.alert(
-        'Deuda pendiente',
-        'Tenés una deuda pendiente. Regularizá tu balance para enviar propuestas.',
-        [{ text: 'Ver ganancias', onPress: () => router.push('/(professional)/earnings') }]
-      );
-      return;
-    }
-
-    const { error } = await supabase.from('proposals').insert({
-      request_id: id,
-      professional_id: prof.id,
-      price: numPrice,
-      message: message || null,
-      estimated_arrival: eta,
-    });
-
-    setSubmitting(false);
-
-    if (error) {
-      Alert.alert('Error', error.message);
-      return;
-    }
-
-    Alert.alert('¡Propuesta enviada!', 'El cliente será notificado.', [
-      { text: 'Volver', onPress: () => router.back() },
-    ]);
   }
 
   if (loading) {

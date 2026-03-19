@@ -11,6 +11,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
+import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 import { CardSkeleton } from '@/components/SkeletonLoader';
@@ -61,34 +62,38 @@ export default function ProfessionalFeedScreen() {
 
   async function checkVerificationStatus() {
     if (!user?.id) return;
-    const { data } = await supabase
-      .from('professionals')
-      .select('status')
-      .eq('user_id', user.id)
-      .single();
-    setVerificationStatus(data?.status ?? null);
+    try {
+      const profile = await api.getProfile();
+      if (profile?.professional_status) {
+        setVerificationStatus(profile.professional_status);
+      }
+    } catch (e) {
+      console.warn('Error checking verification:', e);
+    }
   }
 
   async function loadStats() {
     if (!user?.id) return;
-    const { data } = await supabase
-      .from('professionals')
-      .select('jobs_completed, rating_avg')
-      .eq('user_id', user.id)
-      .single();
-    if (data) {
-      setStats({ jobsCompleted: data.jobs_completed ?? 0, rating: data.rating_avg ?? 0 });
+    try {
+      const profile = await api.getProfile();
+      if (profile) {
+        setStats({
+          jobsCompleted: profile.jobs_completed ?? 0,
+          rating: profile.rating_avg ?? 0,
+        });
+      }
+    } catch (e) {
+      console.warn('Error loading stats:', e);
     }
   }
 
   async function fetchRequests() {
-    const { data } = await supabase
-      .from('service_requests')
-      .select('*, categories(name)')
-      .eq('status', 'open')
-      .order('created_at', { ascending: false });
-
-    setRequests(data ?? []);
+    try {
+      const data = await api.getRequests({ status: 'open' });
+      setRequests(data ?? []);
+    } catch (e) {
+      console.warn('Error fetching requests:', e);
+    }
     setLoading(false);
   }
 

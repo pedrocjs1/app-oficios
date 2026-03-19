@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SHADOWS, RADIUS, SPACING } from '@/constants/theme';
 
@@ -41,22 +42,17 @@ export default function AdminDashboard() {
 
   async function loadStats() {
     try {
-      const [usersRes, prosRes, pendingRes, requestsRes, jobsRes] = await Promise.all([
-        supabase.from('users').select('id', { count: 'exact', head: true }),
-        supabase.from('professionals').select('id', { count: 'exact', head: true }),
-        supabase.from('professionals').select('id', { count: 'exact', head: true }).eq('status', 'pending_verification'),
-        supabase.from('service_requests').select('id', { count: 'exact', head: true }).in('status', ['open', 'in_proposals', 'assigned', 'in_progress']),
-        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'confirmed'),
-      ]);
-
-      setStats({
-        totalUsers: usersRes.count || 0,
-        totalProfessionals: prosRes.count || 0,
-        pendingVerification: pendingRes.count || 0,
-        activeRequests: requestsRes.count || 0,
-        completedJobs: jobsRes.count || 0,
-        totalRevenue: 0,
-      });
+      const data = await api.getAdminDashboard();
+      if (data) {
+        setStats({
+          totalUsers: data.total_users ?? 0,
+          totalProfessionals: data.total_professionals ?? 0,
+          pendingVerification: data.pending_verification ?? 0,
+          activeRequests: data.active_requests ?? 0,
+          completedJobs: data.completed_jobs ?? 0,
+          totalRevenue: data.total_revenue ?? 0,
+        });
+      }
     } catch (e) {
       console.warn('Error loading stats:', e);
     }
@@ -72,8 +68,13 @@ export default function AdminDashboard() {
     setRefreshing(false);
   }
 
+  const { setToken, setUser: setAuthUser, setSession } = useAuthStore();
+
   function handleLogout() {
     supabase.auth.signOut();
+    setToken(null);
+    setAuthUser(null);
+    setSession(null);
   }
 
   const statCards: {

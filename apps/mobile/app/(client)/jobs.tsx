@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 
@@ -52,21 +52,8 @@ export default function ClientJobsScreen() {
   const fetchJobs = useCallback(async (showLoader = true) => {
     if (showLoader) setLoading(true);
     try {
-      const statuses = activeTab === 'active' ? ACTIVE_STATUSES : COMPLETED_STATUSES;
-
-      const { data } = await supabase
-        .from('jobs')
-        .select(`
-          *,
-          professionals!jobs_professional_id_fkey(
-            users!professionals_user_id_fkey(name, avatar_url)
-          ),
-          service_requests(problem_type, categories(name))
-        `)
-        .eq('client_id', user?.id)
-        .in('status', statuses)
-        .order('created_at', { ascending: false });
-
+      const status = activeTab === 'active' ? 'active' : 'confirmed';
+      const data = await api.getJobs({ status });
       setJobs(data ?? []);
     } catch {
       // silently fail

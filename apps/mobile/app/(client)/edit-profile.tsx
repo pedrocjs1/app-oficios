@@ -15,8 +15,8 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { supabase } from '@/lib/supabase';
-import { uploadImage } from '@/lib/uploadImage';
+import { api } from '@/services/api';
+import { uploadImageApi } from '@/lib/uploadImageApi';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 
@@ -52,25 +52,23 @@ export default function ClientEditProfileScreen() {
 
     if (avatarUri) {
       const path = `${user?.id}/avatar.jpg`;
-      const uploaded = await uploadImage(avatarUri, 'avatars', path);
+      const uploaded = await uploadImageApi(avatarUri, 'avatars', path);
       if (uploaded) avatar_url = uploaded;
     }
 
-    const { error } = await supabase
-      .from('users')
-      .update({
+    try {
+      await api.updateProfile({
         name: name.trim(),
         phone: phone.trim() || null,
-        avatar_url,
-      })
-      .eq('id', user?.id);
-
-    setLoading(false);
-
-    if (error) {
-      Alert.alert('Error', 'No se pudo guardar los cambios');
+        avatar_url: avatar_url ?? undefined,
+      });
+    } catch (e: any) {
+      setLoading(false);
+      Alert.alert('Error', e.message || 'No se pudo guardar los cambios');
       return;
     }
+
+    setLoading(false);
 
     setUser({ ...user!, name: name.trim(), phone: phone.trim() || null, avatar_url });
     Alert.alert('Listo', 'Perfil actualizado', [

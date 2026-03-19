@@ -82,7 +82,7 @@ lib/
 ## Supabase Credentials
 - **URL:** https://ldjowvkqdqyjulnbpacx.supabase.co
 - **Anon Key:** In .env.local (EXPO_PUBLIC_SUPABASE_ANON_KEY)
-- **Service Role Key:** eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxkam93dmtxZHF5anVsbmJwYWN4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MzQyMzYzMSwiZXhwIjoyMDg4OTk5NjMxfQ.n8YTYIrNG7l2m7vx5oXjxeAAUxEjKnpvSNaQ11du9kI
+- **Service Role Key:** In .env (SUPABASE_SERVICE_ROLE_KEY) - NEVER commit this
 - Use service role key for API operations that bypass RLS (creating data, admin operations)
 - RLS policies (CREATE POLICY) can ONLY be created via SQL Editor in Supabase Dashboard - the REST API does not support DDL
 

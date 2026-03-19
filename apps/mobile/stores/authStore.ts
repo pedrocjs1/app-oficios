@@ -14,8 +14,10 @@ type User = {
 type AuthState = {
   session: Session | null;
   user: User | null;
+  token: string | null;
   setSession: (session: Session | null) => void;
   setUser: (user: User | null) => void;
+  setToken: (token: string | null) => void;
   isAuthenticated: () => boolean;
   isProfessional: () => boolean;
   isAdmin: () => boolean;
@@ -24,9 +26,11 @@ type AuthState = {
 export const useAuthStore = create<AuthState>((set, get) => ({
   session: null,
   user: null,
+  token: null,
   setSession: (session) => set({ session }),
   setUser: (user) => set({ user }),
-  isAuthenticated: () => !!get().session,
+  setToken: (token) => set({ token }),
+  isAuthenticated: () => !!get().token,
   isProfessional: () => {
     const role = get().user?.role;
     return role === 'professional' || role === 'both';

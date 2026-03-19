@@ -9,10 +9,12 @@ export const createRequestSchema = z.object({
   description: z
     .string({ required_error: 'La descripción es obligatoria' })
     .min(10, 'La descripción debe tener al menos 10 caracteres'),
-  urgency: z.enum(['low', 'medium', 'high', 'emergency'], {
+  urgency: z.enum(['normal', 'urgent', 'emergency'], {
     required_error: 'La urgencia es obligatoria',
-    invalid_type_error: 'La urgencia debe ser baja, media, alta o emergencia',
+    invalid_type_error: 'La urgencia debe ser normal, urgente o emergencia',
   }),
+  address_text: z.string().optional(),
+  photos: z.array(z.string()).optional(),
   location: z
     .object({
       lat: z.number({ required_error: 'La latitud es obligatoria' }),

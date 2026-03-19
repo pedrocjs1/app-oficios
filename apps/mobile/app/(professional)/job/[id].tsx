@@ -19,7 +19,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
-import { uploadImage } from '@/lib/uploadImage';
+import { api } from '@/services/api';
+import { uploadImageApi } from '@/lib/uploadImageApi';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 import { SafeImage } from '@/components/SafeImage';
@@ -144,26 +145,22 @@ export default function ProfessionalJobScreen() {
   }, [id]);
 
   async function fetchJob() {
-    const { data } = await supabase
-      .from('jobs')
-      .select(`
-        *,
-        users!jobs_client_id_fkey(name, avatar_url, phone),
-        service_requests(problem_type, description, photos, urgency, address_text, categories(name))
-      `)
-      .eq('id', id)
-      .single();
-    setJob(data);
+    try {
+      const data = await api.getJob(id!);
+      setJob(data);
+    } catch (e) {
+      console.warn('Error fetching job:', e);
+    }
     setLoading(false);
   }
 
   async function fetchMessages() {
-    const { data } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('job_id', id)
-      .order('created_at');
-    setMessages(data ?? []);
+    try {
+      const data = await api.getMessages(id!);
+      setMessages(data ?? []);
+    } catch (e) {
+      console.warn('Error fetching messages:', e);
+    }
   }
 
   async function sendMessage() {
@@ -172,17 +169,9 @@ export default function ProfessionalJobScreen() {
     const content = newMessage.trim();
     setNewMessage('');
 
-    const { error } = await supabase.from('messages').insert({
-      job_id: id,
-      sender_id: user?.id,
-      content,
-    });
-
-    if (error) {
-      Alert.alert('Error', 'No se pudo enviar el mensaje');
-      setNewMessage(content);
-    } else {
-      // Add message to local state immediately (don't depend on fetchMessages/RLS)
+    try {
+      await api.sendMessage(id!, content);
+      // Add message to local state immediately
       const localMsg: Message = {
         id: `local-${Date.now()}`,
         content,
@@ -192,6 +181,9 @@ export default function ProfessionalJobScreen() {
       };
       setMessages((prev) => [...prev, localMsg]);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo enviar el mensaje');
+      setNewMessage(content);
     }
     setSending(false);
   }
@@ -216,7 +208,7 @@ export default function ProfessionalJobScreen() {
   }
 
   async function uploadWorkPhoto(uri: string, jobId: string, index: number): Promise<string> {
-    const url = await uploadImage(uri, 'request-photos', `jobs/${jobId}/${index}.jpg`);
+    const url = await uploadImageApi(uri, 'request-photos', `jobs/${jobId}/${index}.jpg`);
     return url ?? '';
   }
 
@@ -246,37 +238,13 @@ export default function ProfessionalJobScreen() {
                 photoUrls.push(url);
               }
 
-              // Try updating with professional_photos column
-              const { error } = await supabase
-                .from('jobs')
-                .update({
-                  status: 'completed_by_professional',
-                  completed_at: new Date().toISOString(),
-                  professional_photos: photoUrls,
-                } as any)
-                .eq('id', id);
-
-              if (error) {
-                // If professional_photos column doesn't exist, update without it
-                const { error: error2 } = await supabase
-                  .from('jobs')
-                  .update({
-                    status: 'completed_by_professional',
-                    completed_at: new Date().toISOString(),
-                  })
-                  .eq('id', id);
-
-                if (error2) {
-                  Alert.alert('Error', 'No se pudo actualizar el estado. Intenta de nuevo.');
-                  setUploading(false);
-                  return;
-                }
-              }
+              // Mark job as completed via API
+              await api.completeJob(id!);
 
               setWorkPhotos([]);
               await fetchJob();
-            } catch (e) {
-              Alert.alert('Error', 'Hubo un problema al subir las fotos. Intenta de nuevo.');
+            } catch (e: any) {
+              Alert.alert('Error', e.message || 'Hubo un problema. Intenta de nuevo.');
             }
             setUploading(false);
           },

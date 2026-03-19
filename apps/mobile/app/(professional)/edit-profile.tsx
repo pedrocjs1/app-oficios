@@ -16,8 +16,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
-import { supabase } from '@/lib/supabase';
-import { uploadImage } from '@/lib/uploadImage';
+import { api } from '@/services/api';
+import { uploadImageApi } from '@/lib/uploadImageApi';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 
@@ -32,13 +32,12 @@ export default function ProfessionalEditProfileScreen() {
   const [loadingProfile, setLoadingProfile] = useState(true);
 
   useEffect(() => {
-    supabase
-      .from('professionals')
-      .select('bio')
-      .eq('user_id', user?.id)
-      .single()
-      .then(({ data }) => {
+    api.getProfile()
+      .then((data) => {
         if (data?.bio) setBio(data.bio);
+        setLoadingProfile(false);
+      })
+      .catch(() => {
         setLoadingProfile(false);
       });
   }, []);
@@ -67,32 +66,24 @@ export default function ProfessionalEditProfileScreen() {
 
     if (avatarUri) {
       const path = `${user?.id}/avatar.jpg`;
-      const uploaded = await uploadImage(avatarUri, 'avatars', path);
+      const uploaded = await uploadImageApi(avatarUri, 'avatars', path);
       if (uploaded) avatar_url = uploaded;
     }
 
-    // Update users table
-    const { error: userError } = await supabase
-      .from('users')
-      .update({
+    try {
+      await api.updateProfile({
         name: name.trim(),
         phone: phone.trim() || null,
-        avatar_url,
-      })
-      .eq('id', user?.id);
-
-    // Update professionals table
-    const { error: proError } = await supabase
-      .from('professionals')
-      .update({ bio: bio.trim() || null })
-      .eq('user_id', user?.id);
-
-    setLoading(false);
-
-    if (userError || proError) {
-      Alert.alert('Error', 'No se pudo guardar los cambios');
+        avatar_url: avatar_url ?? undefined,
+        bio: bio.trim() || undefined,
+      });
+    } catch (e: any) {
+      setLoading(false);
+      Alert.alert('Error', e.message || 'No se pudo guardar los cambios');
       return;
     }
+
+    setLoading(false);
 
     setUser({ ...user!, name: name.trim(), phone: phone.trim() || null, avatar_url });
     Alert.alert('Listo', 'Perfil actualizado', [

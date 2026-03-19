@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 
@@ -51,27 +51,8 @@ export default function ProfessionalJobsScreen() {
   const fetchJobs = useCallback(async (showLoader = true) => {
     if (showLoader) setLoading(true);
     try {
-      // First get the professional's ID
-      const { data: prof } = await supabase
-        .from('professionals')
-        .select('id')
-        .eq('user_id', user?.id)
-        .single();
-
-      if (!prof) {
-        setJobs([]);
-        return;
-      }
-
-      const statuses = activeTab === 'active' ? ACTIVE_STATUSES : COMPLETED_STATUSES;
-
-      const { data } = await supabase
-        .from('jobs')
-        .select('*, users!jobs_client_id_fkey(name, avatar_url), service_requests(problem_type, categories(name))')
-        .eq('professional_id', prof.id)
-        .in('status', statuses)
-        .order('created_at', { ascending: false });
-
+      const status = activeTab === 'active' ? 'active' : 'confirmed';
+      const data = await api.getJobs({ status });
       setJobs(data ?? []);
     } catch {
       // silently fail

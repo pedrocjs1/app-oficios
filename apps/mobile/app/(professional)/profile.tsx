@@ -14,13 +14,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
+import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 import { router, useFocusEffect } from 'expo-router';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 import { SafeImage } from '@/components/SafeImage';
 
 export default function ProfessionalProfileScreen() {
-  const { user, setSession, setUser } = useAuthStore();
+  const { user, setSession, setUser, setToken } = useAuthStore();
   const [refreshing, setRefreshing] = useState(false);
   const insets = useSafeAreaInsets();
 
@@ -32,12 +33,12 @@ export default function ProfessionalProfileScreen() {
 
   async function refreshProfile() {
     if (!user?.id) return;
-    const { data } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', user.id)
-      .single();
-    if (data) setUser(data);
+    try {
+      const data = await api.getProfile();
+      if (data) setUser(data);
+    } catch (e) {
+      console.warn('Error refreshing profile:', e);
+    }
   }
 
   async function onRefresh() {
@@ -56,6 +57,7 @@ export default function ProfessionalProfileScreen() {
           await supabase.auth.signOut();
           setSession(null);
           setUser(null);
+          setToken(null);
           router.replace('/(auth)/login');
         },
       },

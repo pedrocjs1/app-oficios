@@ -17,8 +17,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { supabase } from '@/lib/supabase';
-import { uploadImage } from '@/lib/uploadImage';
+import { api } from '@/services/api';
+import { uploadImageApi } from '@/lib/uploadImageApi';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 
@@ -55,12 +55,13 @@ export default function NewRequestScreen() {
   const [fetchingCategories, setFetchingCategories] = useState(true);
 
   useEffect(() => {
-    supabase
-      .from('categories')
-      .select('*')
-      .order('sort_order')
-      .then(({ data }) => {
+    api.getCategories()
+      .then((data) => {
         setCategories(data ?? []);
+        setFetchingCategories(false);
+      })
+      .catch((e) => {
+        console.warn('Error fetching categories:', e);
         setFetchingCategories(false);
       });
   }, []);
@@ -81,7 +82,7 @@ export default function NewRequestScreen() {
   }
 
   async function uploadPhoto(uri: string, requestId: string, index: number): Promise<string> {
-    const url = await uploadImage(uri, 'request-photos', `${requestId}/${index}.jpg`);
+    const url = await uploadImageApi(uri, 'request-photos', `${requestId}/${index}.jpg`);
     return url ?? '';
   }
 
@@ -105,21 +106,16 @@ export default function NewRequestScreen() {
         // Continuar sin ubicación
       }
 
-      const { data: request, error } = await supabase
-        .from('service_requests')
-        .insert({
-          client_id: user?.id,
-          category_id: selectedCategory.id,
-          problem_type: selectedProblem,
-          description: description.trim(),
-          urgency,
-          location,
-          photos: '[]',
-        })
-        .select()
-        .single();
+      const request = await api.createRequest({
+        category_id: selectedCategory.id,
+        problem_type: selectedProblem,
+        description: description.trim(),
+        urgency,
+        location,
+        photos: [],
+      });
 
-      if (error || !request) {
+      if (!request || !request.id) {
         Alert.alert('Error', 'No se pudo crear el pedido. Intentá de nuevo.');
         return;
       }
@@ -129,10 +125,7 @@ export default function NewRequestScreen() {
           const photoUrls = await Promise.all(
             photos.map((uri, i) => uploadPhoto(uri, request.id, i))
           );
-          await supabase
-            .from('service_requests')
-            .update({ photos: JSON.stringify(photoUrls) })
-            .eq('id', request.id);
+          await api.updateRequest(request.id, { photos: photoUrls });
         } catch {
           console.warn('Error uploading photos');
         }
@@ -143,9 +136,9 @@ export default function NewRequestScreen() {
         'Los profesionales de tu zona recibirán una notificación.',
         [{ text: 'Ver mis pedidos', onPress: () => router.replace('/(client)') }]
       );
-    } catch (e) {
+    } catch (e: any) {
       console.warn('Error creating request:', e);
-      Alert.alert('Error', 'Ocurrió un error inesperado. Intentá de nuevo.');
+      Alert.alert('Error', e.message || 'Ocurrió un error inesperado. Intentá de nuevo.');
     } finally {
       setLoading(false);
     }

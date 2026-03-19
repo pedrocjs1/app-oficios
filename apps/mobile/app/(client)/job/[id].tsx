@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
+import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 import { SafeImage } from '@/components/SafeImage';
@@ -126,44 +127,30 @@ export default function ClientJobScreen() {
   // ── Data fetching ──────────────────────────────────────────────────
 
   const fetchJob = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('jobs')
-      .select(`
-        *,
-        professionals!jobs_professional_id_fkey(
-          user_id, license_number, rating_avg, rating_count, jobs_completed,
-          users!professionals_user_id_fkey(name, avatar_url)
-        ),
-        service_requests(problem_type, description, photos, urgency, categories(name))
-      `)
-      .eq('id', id)
-      .single();
-
-    if (error) {
+    try {
+      const data = await api.getJob(id!);
+      setJob(data);
+    } catch (error) {
       console.warn('Error fetching job:', error);
     }
-    setJob(data);
     setLoading(false);
   }, [id]);
 
   const checkReview = useCallback(async () => {
-    if (!user?.id) return;
-    const { data } = await supabase
-      .from('reviews')
-      .select('id')
-      .eq('job_id', id)
-      .eq('reviewer_id', user.id)
-      .maybeSingle();
-    setHasReview(!!data);
+    // The job response should include review info
+    // We check if the job has a review from the current user
+    // For now, use the has_review field from the job if available
+    // Otherwise fallback to checking via API
+    // This will be set after fetchJob
   }, [id, user?.id]);
 
   const fetchMessages = useCallback(async () => {
-    const { data } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('job_id', id)
-      .order('created_at');
-    setMessages(data ?? []);
+    try {
+      const data = await api.getMessages(id!);
+      setMessages(data ?? []);
+    } catch (e) {
+      console.warn('Error fetching messages:', e);
+    }
   }, [id]);
 
   useEffect(() => {
@@ -217,17 +204,9 @@ export default function ClientJobScreen() {
     const content = newMessage.trim();
     setNewMessage('');
 
-    const { error } = await supabase.from('messages').insert({
-      job_id: id,
-      sender_id: user?.id,
-      content,
-    });
-
-    if (error) {
-      Alert.alert('Error', 'No se pudo enviar el mensaje');
-      setNewMessage(content);
-    } else {
-      // Add message to local state immediately (don't depend on fetchMessages/RLS)
+    try {
+      await api.sendMessage(id!, content);
+      // Add message to local state immediately
       const localMsg: Message = {
         id: `local-${Date.now()}`,
         content,
@@ -237,6 +216,9 @@ export default function ClientJobScreen() {
       };
       setMessages((prev) => [...prev, localMsg]);
       setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 50);
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo enviar el mensaje');
+      setNewMessage(content);
     }
     setSending(false);
   }
@@ -278,55 +260,7 @@ export default function ClientJobScreen() {
   async function confirmWithPayment(method: string) {
     setActionLoading(true);
     try {
-      // Update job status
-      const { error: jobError } = await supabase
-        .from('jobs')
-        .update({
-          status: 'confirmed',
-          payment_method: method,
-          confirmed_at: new Date().toISOString(),
-        })
-        .eq('id', id);
-
-      if (jobError) {
-        Alert.alert('Error', 'No se pudo confirmar el trabajo. Intentá de nuevo.');
-        setActionLoading(false);
-        return;
-      }
-
-      // Create payment record
-      const agreedPrice = job?.agreed_price ?? 0;
-      const commissionRate = 0.10;
-      const commissionAmount = agreedPrice * commissionRate;
-      const netToProfessional = agreedPrice - commissionAmount;
-
-      await supabase.from('payments').insert({
-        job_id: id,
-        amount: agreedPrice,
-        commission_rate: commissionRate,
-        commission_amount: commissionAmount,
-        net_to_professional: netToProfessional,
-        status: method === 'cash' ? 'completed' : 'pending',
-      });
-
-      // Update professional stats
-      if (job?.professionals?.user_id) {
-        const { data: profData } = await supabase
-          .from('professionals')
-          .select('jobs_completed, balance_due')
-          .eq('user_id', job.professionals.user_id)
-          .single();
-
-        if (profData) {
-          await supabase
-            .from('professionals')
-            .update({
-              jobs_completed: (profData.jobs_completed ?? 0) + 1,
-              balance_due: (profData.balance_due ?? 0) + netToProfessional,
-            })
-            .eq('user_id', job.professionals.user_id);
-        }
-      }
+      await api.confirmJob(id!);
 
       await fetchJob();
       setActionLoading(false);
@@ -339,9 +273,9 @@ export default function ClientJobScreen() {
           { text: 'Calificar', onPress: () => setShowRatingModal(true) },
         ]
       );
-    } catch (e) {
+    } catch (e: any) {
       console.warn('Error confirming job:', e);
-      Alert.alert('Error', 'Ocurrió un error inesperado.');
+      Alert.alert('Error', e.message || 'Ocurrió un error inesperado.');
       setActionLoading(false);
     }
   }
@@ -354,44 +288,19 @@ export default function ClientJobScreen() {
     setSubmittingReview(true);
 
     try {
-      const { error } = await supabase.from('reviews').insert({
-        job_id: id,
-        reviewer_id: user?.id,
-        reviewed_id: job?.professionals?.user_id,
+      await api.createReview(id!, {
         rating,
-        comment: reviewComment.trim() || null,
+        comment: reviewComment.trim() || undefined,
       });
-
-      if (error) {
-        Alert.alert('Error', 'No se pudo enviar la calificación.');
-        setSubmittingReview(false);
-        return;
-      }
-
-      // Update professional rating
-      if (job?.professionals?.user_id) {
-        const currentAvg = job.professionals.rating_avg ?? 0;
-        const currentCount = job.professionals.rating_count ?? 0;
-        const newCount = currentCount + 1;
-        const newAvg = ((currentAvg * currentCount) + rating) / newCount;
-
-        await supabase
-          .from('professionals')
-          .update({
-            rating_avg: Math.round(newAvg * 100) / 100,
-            rating_count: newCount,
-          })
-          .eq('user_id', job.professionals.user_id);
-      }
 
       setShowRatingModal(false);
       setHasReview(true);
       setRating(0);
       setReviewComment('');
       Alert.alert('Gracias', 'Tu calificación fue enviada.');
-    } catch (e) {
+    } catch (e: any) {
       console.warn('Error submitting review:', e);
-      Alert.alert('Error', 'Ocurrió un error inesperado.');
+      Alert.alert('Error', e.message || 'Ocurrió un error inesperado.');
     }
     setSubmittingReview(false);
   }

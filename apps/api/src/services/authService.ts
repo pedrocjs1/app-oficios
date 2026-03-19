@@ -65,8 +65,8 @@ export async function registerUser(
 
   const token = generateToken(fastify, {
     id: user.id,
-    role: user.role,
-    email: user.email,
+    role: user.role ?? "client",
+    email: user.email!,
   });
 
   const { passwordHash: _, ...safeUser } = user;
@@ -128,8 +128,8 @@ export async function registerProfessional(
 
   const token = generateToken(fastify, {
     id: result.user.id,
-    role: result.user.role,
-    email: result.user.email,
+    role: result.user.role ?? "professional",
+    email: result.user.email!,
   });
 
   const { passwordHash: _, ...safeUser } = result.user;
@@ -148,23 +148,61 @@ export async function loginUser(
 ): Promise<{ user: any; token: string }> {
   const user = await fastify.prisma.user.findUnique({ where: { email } });
 
-  if (!user || !user.passwordHash) {
+  if (!user) {
     const err = new Error("Credenciales invalidas") as any;
     err.statusCode = 401;
     throw err;
   }
 
-  const valid = await verifyPassword(password, user.passwordHash);
-  if (!valid) {
-    const err = new Error("Credenciales invalidas") as any;
-    err.statusCode = 401;
-    throw err;
+  // If user has a password_hash, verify directly
+  if (user.passwordHash) {
+    const valid = await verifyPassword(password, user.passwordHash);
+    if (!valid) {
+      const err = new Error("Credenciales invalidas") as any;
+      err.statusCode = 401;
+      throw err;
+    }
+  } else {
+    // Fallback: verify via Supabase Auth for migrated users
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      const err = new Error("Credenciales invalidas") as any;
+      err.statusCode = 401;
+      throw err;
+    }
+
+    const res = await fetch(
+      `${supabaseUrl}/auth/v1/token?grant_type=password`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: supabaseServiceKey,
+        },
+        body: JSON.stringify({ email, password }),
+      }
+    );
+
+    if (!res.ok) {
+      const err = new Error("Credenciales invalidas") as any;
+      err.statusCode = 401;
+      throw err;
+    }
+
+    // Migrate: store the password hash for future direct logins
+    const hashed = await hashPassword(password);
+    await fastify.prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: hashed },
+    });
   }
 
   const token = generateToken(fastify, {
     id: user.id,
-    role: user.role,
-    email: user.email,
+    role: user.role ?? "client",
+    email: user.email!,
   });
 
   const { passwordHash: _, ...safeUser } = user;

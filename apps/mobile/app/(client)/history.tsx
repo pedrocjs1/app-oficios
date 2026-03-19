@@ -12,7 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SHADOWS, RADIUS } from '@/constants/theme';
 
@@ -52,20 +52,7 @@ export default function HistoryScreen() {
   async function loadHistory() {
     if (!user?.id) return;
     try {
-      const { data } = await supabase
-        .from('jobs')
-        .select(`
-          *,
-          professionals!jobs_professional_id_fkey(
-            users!professionals_user_id_fkey(name, avatar_url)
-          ),
-          service_requests(problem_type, categories(name)),
-          reviews(rating, comment)
-        `)
-        .eq('client_id', user.id)
-        .eq('status', 'confirmed')
-        .order('confirmed_at', { ascending: false });
-
+      const data = await api.getJobs({ status: 'confirmed' });
       setJobs((data as CompletedJob[]) ?? []);
     } catch (e) {
       console.warn('Error loading history:', e);
