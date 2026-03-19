@@ -1,0 +1,267 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Users ───────────────────────────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email         String   @unique
+  phone         String?
+  phoneHash     String?  @map("phone_hash")
+  name          String
+  avatarUrl     String?  @map("avatar_url")
+  role          String   // client | professional | both | admin
+  location      String?
+  pushToken     String?  @map("push_token")
+  passwordHash  String?  @map("password_hash")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  professional       Professional?
+  serviceRequests    ServiceRequest[]
+  jobsAsClient       Job[]       @relation("JobClient")
+  jobsAsProfessional Job[]       @relation("JobProfessional")
+  messages           Message[]
+  reviewsGiven       Review[]    @relation("ReviewReviewer")
+  reviewsReceived    Review[]    @relation("ReviewReviewed")
+  disputes           Dispute[]
+
+  @@map("users")
+}
+
+// ─── Professionals ───────────────────────────────────────────────────────────
+
+model Professional {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String   @unique @map("user_id") @db.Uuid
+  licenseNumber   String   @map("license_number")
+  licensePhotoUrl String?  @map("license_photo_url")
+  dniPhotoUrl     String?  @map("dni_photo_url")
+  selfieUrl       String?  @map("selfie_url")
+  bio             String?
+  verified        Boolean
+  status          String   // pending_verification | verified | suspended
+  ratingAvg       Decimal  @default(0) @map("rating_avg")
+  ratingCount     Int      @default(0) @map("rating_count")
+  jobsCompleted   Int      @default(0) @map("jobs_completed")
+  balanceDue      Decimal  @default(0) @map("balance_due")
+  mpAccountId     String?  @map("mp_account_id")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user       User                   @relation(fields: [userId], references: [id])
+  categories ProfessionalCategory[]
+  zones      ProfessionalZone[]
+  proposals  Proposal[]
+
+  @@map("professionals")
+}
+
+// ─── Categories ──────────────────────────────────────────────────────────────
+
+model Category {
+  id             String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name           String
+  slug           String
+  iconUrl        String? @map("icon_url")
+  commonProblems Json?   @map("common_problems")
+  isLicensed     Boolean @map("is_licensed")
+  sortOrder      Int     @map("sort_order")
+
+  professionals   ProfessionalCategory[]
+  serviceRequests ServiceRequest[]
+
+  @@map("categories")
+}
+
+// ─── Service Zones ───────────────────────────────────────────────────────────
+
+model ServiceZone {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String
+  city      String
+  province  String
+  country   String  @default("AR")
+  boundary  String? // PostGIS POLYGON stored as hex
+
+  professionals ProfessionalZone[]
+
+  @@map("service_zones")
+}
+
+// ─── Professional Categories (many-to-many) ──────────────────────────────────
+
+model ProfessionalCategory {
+  professionalId String @map("professional_id") @db.Uuid
+  categoryId     String @map("category_id") @db.Uuid
+
+  professional Professional @relation(fields: [professionalId], references: [id])
+  category     Category     @relation(fields: [categoryId], references: [id])
+
+  @@id([professionalId, categoryId])
+  @@map("professional_categories")
+}
+
+// ─── Professional Zones (many-to-many) ───────────────────────────────────────
+
+model ProfessionalZone {
+  professionalId String @map("professional_id") @db.Uuid
+  zoneId         String @map("zone_id") @db.Uuid
+
+  professional Professional @relation(fields: [professionalId], references: [id])
+  zone         ServiceZone  @relation(fields: [zoneId], references: [id])
+
+  @@id([professionalId, zoneId])
+  @@map("professional_zones")
+}
+
+// ─── Service Requests ────────────────────────────────────────────────────────
+
+model ServiceRequest {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clientId       String    @map("client_id") @db.Uuid
+  categoryId     String    @map("category_id") @db.Uuid
+  problemType    String    @map("problem_type")
+  description    String
+  photos         String?   // JSON string, not native JSONB
+  urgency        String    // low | normal | medium | high | emergency
+  location       String?   // PostGIS POINT stored as hex
+  addressText    String?   @map("address_text")
+  status         String    // open | in_proposals | assigned | in_progress | completed | cancelled
+  maxProposals   Int       @default(5) @map("max_proposals")
+  proposalsCount Int       @default(0) @map("proposals_count")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  expiresAt      DateTime? @map("expires_at") @db.Timestamptz
+
+  client    User       @relation(fields: [clientId], references: [id])
+  category  Category   @relation(fields: [categoryId], references: [id])
+  proposals Proposal[]
+  jobs      Job[]
+
+  @@map("service_requests")
+}
+
+// ─── Proposals ───────────────────────────────────────────────────────────────
+
+model Proposal {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requestId        String   @map("request_id") @db.Uuid
+  professionalId   String   @map("professional_id") @db.Uuid
+  price            Decimal
+  message          String
+  estimatedArrival String?  @map("estimated_arrival")
+  status           String   // pending | accepted | rejected | withdrawn
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  request      ServiceRequest @relation(fields: [requestId], references: [id])
+  professional Professional   @relation(fields: [professionalId], references: [id])
+  jobs         Job[]
+
+  @@map("proposals")
+}
+
+// ─── Jobs ────────────────────────────────────────────────────────────────────
+
+model Job {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requestId          String    @map("request_id") @db.Uuid
+  proposalId         String    @map("proposal_id") @db.Uuid
+  clientId           String    @map("client_id") @db.Uuid
+  professionalId     String    @map("professional_id") @db.Uuid
+  agreedPrice        Decimal   @map("agreed_price")
+  paymentMethod      String?   @map("payment_method")
+  status             String    // pending_start | in_progress | completed_by_professional | confirmed | disputed
+  startedAt          DateTime? @map("started_at") @db.Timestamptz
+  completedAt        DateTime? @map("completed_at") @db.Timestamptz
+  confirmedAt        DateTime? @map("confirmed_at") @db.Timestamptz
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  professionalPhotos Json?     @map("professional_photos")
+  ratedAt            DateTime? @map("rated_at") @db.Timestamptz
+
+  request      ServiceRequest @relation(fields: [requestId], references: [id])
+  proposal     Proposal       @relation(fields: [proposalId], references: [id])
+  client       User           @relation("JobClient", fields: [clientId], references: [id])
+  professional User           @relation("JobProfessional", fields: [professionalId], references: [id])
+  messages     Message[]
+  reviews      Review[]
+  payments     Payment[]
+  disputes     Dispute[]
+
+  @@map("jobs")
+}
+
+// ─── Messages ────────────────────────────────────────────────────────────────
+
+model Message {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId           String   @map("job_id") @db.Uuid
+  senderId        String   @map("sender_id") @db.Uuid
+  content         String
+  originalContent String?  @map("original_content")
+  flagged         Boolean  @default(false)
+  flagReason      String?  @map("flag_reason")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  job    Job  @relation(fields: [jobId], references: [id])
+  sender User @relation(fields: [senderId], references: [id])
+
+  @@map("messages")
+}
+
+// ─── Reviews ─────────────────────────────────────────────────────────────────
+
+model Review {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId      String   @map("job_id") @db.Uuid
+  reviewerId String   @map("reviewer_id") @db.Uuid
+  reviewedId String   @map("reviewed_id") @db.Uuid
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  job      Job  @relation(fields: [jobId], references: [id])
+  reviewer User @relation("ReviewReviewer", fields: [reviewerId], references: [id])
+  reviewed User @relation("ReviewReviewed", fields: [reviewedId], references: [id])
+
+  @@map("reviews")
+}
+
+// ─── Payments ────────────────────────────────────────────────────────────────
+
+model Payment {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId              String    @map("job_id") @db.Uuid
+  amount             Decimal
+  commissionRate     Decimal?  @map("commission_rate")
+  commissionAmount   Decimal?  @map("commission_amount")
+  netToProfessional  Decimal?  @map("net_to_professional")
+  status             String
+  createdAt          DateTime? @default(now()) @map("created_at") @db.Timestamptz
+
+  job Job @relation(fields: [jobId], references: [id])
+
+  @@map("payments")
+}
+
+// ─── Disputes ────────────────────────────────────────────────────────────────
+
+model Dispute {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId      String    @map("job_id") @db.Uuid
+  openedBy   String    @map("opened_by") @db.Uuid
+  reason     String
+  evidence   String?
+  status     String
+  resolution String?
+  createdAt  DateTime? @default(now()) @map("created_at") @db.Timestamptz
+
+  job    Job  @relation(fields: [jobId], references: [id])
+  opener User @relation(fields: [openedBy], references: [id])
+
+  @@map("disputes")
+}
