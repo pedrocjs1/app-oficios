@@ -21,7 +21,6 @@ export const unstable_settings = {
 
 export default function RootLayout() {
   const [appReady, setAppReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const { setSession, setUser, setToken } = useAuthStore();
 
   // Marcar app como lista inmediatamente (sin depender de SplashScreen)
@@ -42,14 +41,8 @@ export default function RootLayout() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session?.user) {
-        // Use the Supabase access token as our backend token initially
-        // until the user logs in through our backend
         const existingToken = useAuthStore.getState().token;
-        if (!existingToken && session.access_token) {
-          // We don't have our own backend token yet, but we have a Supabase session
-          // Try to fetch user profile via Supabase as fallback
-          fetchUserProfileSupabase(session.user.id);
-        } else if (existingToken) {
+        if (existingToken) {
           fetchUserProfileApi();
         }
       }
@@ -63,8 +56,6 @@ export default function RootLayout() {
         const existingToken = useAuthStore.getState().token;
         if (existingToken) {
           fetchUserProfileApi();
-        } else {
-          fetchUserProfileSupabase(session.user.id);
         }
       } else {
         setUser(null);
@@ -117,30 +108,6 @@ async function fetchUserProfileApi() {
     }
   } catch (e) {
     console.warn('Error fetching user profile via API:', e);
-    // Fallback to Supabase if API fails
-    const session = useAuthStore.getState().session;
-    if (session?.user) {
-      fetchUserProfileSupabase(session.user.id);
-    }
-  }
-}
-
-async function fetchUserProfileSupabase(userId: string) {
-  try {
-    const { setUser } = useAuthStore.getState();
-
-    const { data } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', userId)
-      .single();
-
-    if (data) {
-      setUser(data);
-      routeByRole(data.role);
-    }
-  } catch (e) {
-    console.warn('Error fetching user profile:', e);
   }
 }
 

@@ -1,6 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { supabase } from './supabase';
+import { api } from '@/services/api';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -12,7 +12,7 @@ Notifications.setNotificationHandler({
   }),
 });
 
-export async function registerForPushNotifications(userId: string): Promise<string | null> {
+export async function registerForPushNotifications(): Promise<string | null> {
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
 
@@ -28,11 +28,8 @@ export async function registerForPushNotifications(userId: string): Promise<stri
 
   const token = (await Notifications.getExpoPushTokenAsync()).data;
 
-  // Guardar el token en Supabase
-  await supabase
-    .from('users')
-    .update({ push_token: token })
-    .eq('id', userId);
+  // Guardar el token via API
+  await api.updateProfile({ push_token: token });
 
   // Configurar canal Android
   if (Platform.OS === 'android') {

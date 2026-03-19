@@ -146,7 +146,7 @@ class ApiClient {
     return this.request<any>('GET', '/api/v1/profile');
   }
 
-  async updateProfile(data: { name?: string; phone?: string; avatar_url?: string; bio?: string }) {
+  async updateProfile(data: { name?: string; phone?: string; avatar_url?: string; bio?: string; push_token?: string }) {
     return this.request<any>('PATCH', '/api/v1/profile', data);
   }
 
